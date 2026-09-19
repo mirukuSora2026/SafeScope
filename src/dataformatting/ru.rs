@@ -51,6 +51,12 @@ pub(super) fn render(msg: &Msg) -> String {
         Msg::PatternInvalidGlob { pattern, reason } => {
             format!("Шаблон политики {pattern:?} не является корректным glob: {reason}")
         }
+        Msg::PolicyParseFailed { reason } => {
+            format!("Не удалось прочитать файл политики: {reason}")
+        }
+        Msg::PolicySchemaUnsupported { found, supported } => format!(
+            "Неподдерживаемая версия схемы политики {found}; эта сборка понимает {supported}."
+        ),
         Msg::ProtectedEngineState => "Собственная политика движка и состояние рабочего \
 пространства. Возможность их изменить позволила бы движку переписать то, по чему он проверяет."
             .to_owned(),

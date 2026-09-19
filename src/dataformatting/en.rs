@@ -51,6 +51,12 @@ pub(super) fn render(msg: &Msg) -> String {
         Msg::PatternInvalidGlob { pattern, reason } => {
             format!("The policy pattern {pattern:?} is not a valid glob: {reason}")
         }
+        Msg::PolicyParseFailed { reason } => {
+            format!("The policy file could not be read: {reason}")
+        }
+        Msg::PolicySchemaUnsupported { found, supported } => format!(
+            "Unsupported policy schema_version {found}; this build understands {supported}."
+        ),
         Msg::ProtectedEngineState => "The engine's own policy and workspace state. \
 Changing it would let the engine rewrite what it checks against."
             .to_owned(),

@@ -155,6 +155,10 @@ pub enum Msg {
     PatternTraversal { pattern: String },
     PatternInvalidGlob { pattern: String, reason: String },
 
+    // ── Policy file ────────────────────────────────────────────────────
+    PolicyParseFailed { reason: String },
+    PolicySchemaUnsupported { found: u32, supported: u32 },
+
     // ── Protected paths ────────────────────────────────────────────────
     ProtectedEngineState,
     ProtectedGitHistory,
@@ -306,6 +310,13 @@ mod tests {
             Msg::PatternInvalidGlob {
                 pattern: "[".into(),
                 reason: "unclosed".into(),
+            },
+            Msg::PolicyParseFailed {
+                reason: "expected a table".into(),
+            },
+            Msg::PolicySchemaUnsupported {
+                found: 9,
+                supported: 1,
             },
             Msg::ProtectedEngineState,
             Msg::ProtectedGitHistory,

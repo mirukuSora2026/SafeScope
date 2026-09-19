@@ -54,6 +54,13 @@ pub(super) fn render(msg: &Msg) -> String {
         Msg::PatternInvalidGlob { pattern, reason } => {
             format!("ポリシーパターン {pattern:?} は有効な glob ではありません: {reason}")
         }
+        Msg::PolicyParseFailed { reason } => {
+            format!("ポリシーファイルを読み込めませんでした: {reason}")
+        }
+        Msg::PolicySchemaUnsupported { found, supported } => format!(
+            "サポートされていないポリシーの schema_version {found} です。\
+             このビルドが理解するのは {supported} です。"
+        ),
         Msg::ProtectedEngineState => "エンジン自身のポリシーとワークスペース状態です。\
 変更できると、エンジンが自らの判断根拠を書き換えられてしまいます。"
             .to_owned(),

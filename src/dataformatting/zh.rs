@@ -45,6 +45,12 @@ pub(super) fn render(msg: &Msg) -> String {
         Msg::PatternInvalidGlob { pattern, reason } => {
             format!("策略模式 {pattern:?} 不是有效的 glob：{reason}")
         }
+        Msg::PolicyParseFailed { reason } => {
+            format!("无法读取策略文件：{reason}")
+        }
+        Msg::PolicySchemaUnsupported { found, supported } => {
+            format!("不支持的策略 schema_version {found}；此版本支持 {supported}。")
+        }
         Msg::ProtectedEngineState => "引擎自身的策略与工作区状态。\
 若可修改，引擎便能改写自己的判断依据。"
             .to_owned(),

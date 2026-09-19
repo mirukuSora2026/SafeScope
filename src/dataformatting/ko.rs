@@ -50,6 +50,13 @@ pub(super) fn render(msg: &Msg) -> String {
         Msg::PatternInvalidGlob { pattern, reason } => {
             format!("정책 패턴 {pattern:?} 이 올바른 glob 이 아닙니다: {reason}")
         }
+        Msg::PolicyParseFailed { reason } => {
+            format!("정책 파일을 읽지 못했습니다: {reason}")
+        }
+        Msg::PolicySchemaUnsupported { found, supported } => format!(
+            "지원하지 않는 정책 schema_version {found} 입니다. 이 빌드는 {supported} 을 \
+             이해합니다."
+        ),
         Msg::ProtectedEngineState => "엔진 자신의 정책과 작업 공간 상태입니다. \
 이걸 바꿀 수 있으면 엔진이 자기 판단 근거를 고쳐 쓸 수 있습니다."
             .to_owned(),
