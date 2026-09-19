@@ -97,6 +97,20 @@ fn every_language_renders_every_message() {
             state: "/p/.s".into(),
             workspace: "/p".into(),
         },
+        Msg::PathDestinationExists {
+            path: "b.txt".into(),
+        },
+        Msg::PlatformCrossFilesystem {
+            from: "a".into(),
+            to: "b".into(),
+        },
+        Msg::PlatformAtomicRenameUnsupported {
+            reason: "ENOTSUP".into(),
+        },
+        Msg::PlatformOperationFailed {
+            operation: "fsync".into(),
+            reason: "EIO".into(),
+        },
         Msg::WorkspaceOpenFailed {
             root: "/p".into(),
             reason: "no such file".into(),
@@ -181,7 +195,7 @@ fn every_language_renders_every_message() {
     // omission.
     assert_eq!(
         samples.len(),
-        62,
+        66,
         "add the new Msg variant to this list, then update the count"
     );
 

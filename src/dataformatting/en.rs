@@ -115,6 +115,22 @@ Set SAFESCOPE_DATA_DIR to choose one."
             "Engine state would live at {state}, inside the workspace {workspace}. Snapshots \
              would then sit inside the tree they protect, so registration is refused."
         ),
+        Msg::PathDestinationExists { path } => format!(
+            "{path} already exists. A move never overwrites its destination, because the \
+             file that would be lost has no snapshot."
+        ),
+        Msg::PlatformCrossFilesystem { from, to } => format!(
+            "{from} and {to} are on different filesystems. A move between them cannot be \
+             atomic, so it is refused rather than performed as a copy and a delete."
+        ),
+        Msg::PlatformAtomicRenameUnsupported { reason } => format!(
+            "This filesystem cannot rename without overwriting ({reason}). Checking first and \
+             renaming after would reopen the very race the operation exists to close, so the \
+             operation is refused instead."
+        ),
+        Msg::PlatformOperationFailed { operation, reason } => {
+            format!("The {operation} operation failed: {reason}")
+        }
         Msg::WorkspaceOpenFailed { root, reason } => {
             format!("The workspace at {root} could not be opened: {reason}")
         }

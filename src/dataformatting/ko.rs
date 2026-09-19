@@ -115,6 +115,22 @@ SAFESCOPE_DATA_DIR 로 지정하세요."
             "엔진 상태가 작업 공간 {workspace} 안의 {state} 에 놓이게 됩니다. 그러면 복구 \
              자료가 자기가 보호하는 트리 안에 들어가므로 등록을 거부합니다."
         ),
+        Msg::PathDestinationExists { path } => format!(
+            "{path} 이 이미 있습니다. 이동은 도착지를 덮어쓰지 않습니다. 사라질 파일의 \
+             복구 자료가 없기 때문입니다."
+        ),
+        Msg::PlatformCrossFilesystem { from, to } => format!(
+            "{from} 과 {to} 가 서로 다른 파일시스템에 있습니다. 그 사이의 이동은 원자적일 수 \
+             없어서, 복사 후 삭제로 대신하지 않고 거부합니다."
+        ),
+        Msg::PlatformAtomicRenameUnsupported { reason } => format!(
+            "이 파일시스템은 덮어쓰지 않는 이름 변경을 지원하지 않습니다 ({reason}). 먼저 \
+             확인하고 나중에 이름을 바꾸면 이 연산이 막으려던 경합이 되살아나므로, \
+             대신 거부합니다."
+        ),
+        Msg::PlatformOperationFailed { operation, reason } => {
+            format!("{operation} 연산이 실패했습니다: {reason}")
+        }
         Msg::WorkspaceOpenFailed { root, reason } => {
             format!("{root} 의 작업 공간을 열지 못했습니다: {reason}")
         }

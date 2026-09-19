@@ -268,6 +268,22 @@ pub enum Msg {
         workspace: String,
     },
 
+    // ── Platform file operations ───────────────────────────────────────
+    PathDestinationExists {
+        path: String,
+    },
+    PlatformCrossFilesystem {
+        from: String,
+        to: String,
+    },
+    PlatformAtomicRenameUnsupported {
+        reason: String,
+    },
+    PlatformOperationFailed {
+        operation: String,
+        reason: String,
+    },
+
     // ── Workspace and path resolution ──────────────────────────────────
     WorkspaceOpenFailed {
         root: String,

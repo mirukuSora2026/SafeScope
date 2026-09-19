@@ -29,6 +29,7 @@ pub mod hash;
 pub mod ids;
 pub mod path_guard;
 pub mod paths;
+pub mod platform;
 pub mod policy;
 pub mod registry;
 pub mod store;

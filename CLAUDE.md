@@ -54,6 +54,9 @@ the tests.
   exits with anything but 0 or 2 is non-blocking, and a disabled hook never runs,
   so every check it performs is also performed inside the engine. Never write a
   check that exists only in the hook.
+- Refuse what the platform cannot do properly; never emulate it. A no-overwrite
+  rename that falls back to checking first reopens the race the flag closes, and
+  a cross-filesystem move done as copy-then-delete is not one operation.
 - Never parse a shell command to decide whether it writes. `sed -i`, a redirect
   and a script are not reliably readable, and a check that looks like protection
   without being it is worse than none. Report the gap in the status output.
@@ -83,6 +86,7 @@ src/
 │  ├─ grant.rs         temporary approvals
 │  └─ evaluate.rs      protected → deny → allow → grant → not covered
 ├─ path_guard.rs       Workspace, Resolved — filesystem resolution (I4)
+├─ platform.rs         atomic rename, staged writes, durable removal
 ├─ registry.rs         .safescope/ bootstrap and workspace identity
 ├─ store.rs            state layout, atomic writes
 │  └─ policy_store.rs  approved policy versions
@@ -93,7 +97,7 @@ src/
 ```
 
 Modules still to come: `budget`, `planner`, `executor`, `snapshot`, `journal`,
-`recovery`, `platform`, and the `mcp` adapter.
+`recovery`, and the `mcp` adapter.
 
 ## Commands
 

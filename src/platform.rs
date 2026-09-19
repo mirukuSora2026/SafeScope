@@ -1,0 +1,259 @@
+//! The file operations the executor is built from.
+//!
+//! Every write reaches its final name through a rename, so a reader never sees a
+//! half-written file. Every rename is followed by an fsync of the directory,
+//! because without it the rename itself can be lost in a crash while the caller
+//! believes the write succeeded.
+//!
+//! # Refusing rather than emulating
+//!
+//! Two operations are refused when the platform cannot perform them properly,
+//! instead of being approximated:
+//!
+//! - **Renaming without overwriting.** If the filesystem has no atomic
+//!   no-overwrite rename, checking first and renaming after would reopen exactly
+//!   the race the flag exists to close. A caller that is told "no" can ask a
+//!   person; a caller handed a racy emulation cannot tell the difference.
+//! - **Moving across filesystems.** `rename` cannot do it, and copy-then-delete
+//!   is not one operation: a crash in the middle leaves the file in two places
+//!   or none, and the journal would have recorded a move.
+
+use std::ffi::CString;
+use std::io::Write as _;
+use std::os::fd::{AsFd, AsRawFd};
+
+use cap_std::fs::Dir;
+
+use crate::dataformatting::Msg;
+use crate::error::{Denial, Error, ErrorCode, Fault, Result};
+use crate::paths::TMP_PREFIX;
+
+/// A file written but not yet under its final name.
+///
+/// Dropping one removes it. Anything that fails between writing and renaming
+/// therefore leaves no debris, and the only temporaries recovery has to clean up
+/// are those left by a crash.
+#[derive(Debug)]
+pub struct Staged<'a> {
+    directory: &'a Dir,
+    name: String,
+    promoted: bool,
+}
+
+impl<'a> Staged<'a> {
+    /// The temporary's name, which recovery matches against [`TMP_PREFIX`].
+    pub fn name(&self) -> &str {
+        &self.name
+    }
+
+    /// Renames over whatever is there. Used by `replace`, where overwriting is
+    /// the point and the previous contents are already in the snapshot store.
+    pub fn promote_over(mut self, name: &str) -> Result<()> {
+        rename_within(self.directory, &self.name, name, Overwrite::Allowed)?;
+        self.promoted = true;
+        fsync(self.directory, "fsync")
+    }
+
+    /// Renames only if nothing is there. Used by `create`, where an existing
+    /// file would be destroyed without ever having been snapshotted.
+    pub fn promote_new(mut self, name: &str) -> Result<()> {
+        rename_within(self.directory, &self.name, name, Overwrite::Refused)?;
+        self.promoted = true;
+        fsync(self.directory, "fsync")
+    }
+}
+
+impl Drop for Staged<'_> {
+    fn drop(&mut self) {
+        if !self.promoted {
+            let _ = self.directory.remove_file(&self.name);
+        }
+    }
+}
+
+/// Writes `contents` to a temporary in `directory`, durably.
+///
+/// The temporary sits beside its eventual target so the rename stays within one
+/// filesystem, which is what makes it atomic.
+pub fn stage<'a>(directory: &'a Dir, contents: &[u8]) -> Result<Staged<'a>> {
+    let name = format!("{TMP_PREFIX}{}", uuid::Uuid::new_v4().simple());
+    let staged = Staged {
+        directory,
+        name,
+        promoted: false,
+    };
+
+    let mut file = directory
+        .create(&staged.name)
+        .map_err(|error| failed("create", &error))?;
+    file.write_all(contents)
+        .map_err(|error| failed("write", &error))?;
+    // The contents must be on disk before the rename, or a crash can leave the
+    // target name pointing at an empty file.
+    file.sync_all().map_err(|error| failed("fsync", &error))?;
+
+    Ok(staged)
+}
+
+/// Moves a file between directories without overwriting the destination.
+pub fn move_file(
+    from_directory: &Dir,
+    from_name: &str,
+    to_directory: &Dir,
+    to_name: &str,
+) -> Result<()> {
+    rename_between(from_directory, from_name, to_directory, to_name)?;
+    fsync(from_directory, "fsync")?;
+    fsync(to_directory, "fsync")
+}
+
+/// Removes a file and makes the removal durable.
+pub fn remove(directory: &Dir, name: &str) -> Result<()> {
+    directory
+        .remove_file(name)
+        .map_err(|error| failed("unlink", &error))?;
+    fsync(directory, "fsync")
+}
+
+/// Flushes a directory's own metadata, so a rename or unlink survives a crash.
+pub fn fsync(directory: &Dir, operation: &str) -> Result<()> {
+    rustix::fs::fsync(directory.as_fd())
+        .map_err(|error| failed(operation, &std::io::Error::from(error)))
+}
+
+/// Whether the destination may be replaced.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum Overwrite {
+    Allowed,
+    Refused,
+}
+
+fn rename_within(
+    directory: &Dir,
+    from_name: &str,
+    to_name: &str,
+    overwrite: Overwrite,
+) -> Result<()> {
+    rename(directory, from_name, directory, to_name, overwrite)
+}
+
+fn rename_between(
+    from_directory: &Dir,
+    from_name: &str,
+    to_directory: &Dir,
+    to_name: &str,
+) -> Result<()> {
+    rename(
+        from_directory,
+        from_name,
+        to_directory,
+        to_name,
+        Overwrite::Refused,
+    )
+}
+
+fn rename(
+    from_directory: &Dir,
+    from_name: &str,
+    to_directory: &Dir,
+    to_name: &str,
+    overwrite: Overwrite,
+) -> Result<()> {
+    if overwrite == Overwrite::Allowed {
+        return from_directory
+            .rename(from_name, to_directory, to_name)
+            .map_err(|error| map_rename_error(&error, from_name, to_name));
+    }
+    rename_no_replace(from_directory, from_name, to_directory, to_name)
+        .map_err(|error| map_rename_error(&error, from_name, to_name))
+}
+
+/// Renames only if the destination does not exist, atomically.
+///
+/// Both implementations use the kernel's own flag. Neither falls back to a
+/// check followed by a plain rename: that is the race this exists to close.
+#[cfg(target_os = "linux")]
+fn rename_no_replace(
+    from_directory: &Dir,
+    from_name: &str,
+    to_directory: &Dir,
+    to_name: &str,
+) -> std::io::Result<()> {
+    rustix::fs::renameat_with(
+        from_directory.as_fd(),
+        from_name,
+        to_directory.as_fd(),
+        to_name,
+        rustix::fs::RenameFlags::NOREPLACE,
+    )
+    .map_err(std::io::Error::from)
+}
+
+/// The macOS spelling of the same thing: `renameatx_np` with `RENAME_EXCL`.
+#[cfg(target_os = "macos")]
+fn rename_no_replace(
+    from_directory: &Dir,
+    from_name: &str,
+    to_directory: &Dir,
+    to_name: &str,
+) -> std::io::Result<()> {
+    let from = CString::new(from_name)?;
+    let to = CString::new(to_name)?;
+
+    // SAFETY: both descriptors are borrowed from live `Dir` values for the
+    // duration of the call, and both strings are NUL-terminated and outlive it.
+    let outcome = unsafe {
+        libc::renameatx_np(
+            from_directory.as_fd().as_raw_fd(),
+            from.as_ptr(),
+            to_directory.as_fd().as_raw_fd(),
+            to.as_ptr(),
+            libc::RENAME_EXCL,
+        )
+    };
+    if outcome == 0 {
+        Ok(())
+    } else {
+        Err(std::io::Error::last_os_error())
+    }
+}
+
+/// Turns a rename failure into something a caller can act on.
+fn map_rename_error(error: &std::io::Error, from_name: &str, to_name: &str) -> Error {
+    match error.raw_os_error() {
+        Some(libc::EEXIST) | Some(libc::ENOTEMPTY) => Error::Denied(Denial::new(
+            ErrorCode::DestinationExists,
+            Msg::PathDestinationExists {
+                path: to_name.to_owned(),
+            },
+        )),
+        Some(libc::EXDEV) => Error::Denied(Denial::new(
+            ErrorCode::UnsupportedOperation,
+            Msg::PlatformCrossFilesystem {
+                from: from_name.to_owned(),
+                to: to_name.to_owned(),
+            },
+        )),
+        // The filesystem does not implement the no-overwrite flag. Emulating it
+        // would mean checking first, which is the race the flag exists to close.
+        Some(libc::ENOTSUP) | Some(libc::EINVAL) | Some(libc::ENOSYS) => {
+            Error::Denied(Denial::new(
+                ErrorCode::UnsupportedOperation,
+                Msg::PlatformAtomicRenameUnsupported {
+                    reason: error.to_string(),
+                },
+            ))
+        }
+        _ => failed("rename", error),
+    }
+}
+
+fn failed(operation: &str, error: &std::io::Error) -> Error {
+    Error::Faulted(Fault::new(
+        ErrorCode::IoFailed,
+        Msg::PlatformOperationFailed {
+            operation: operation.to_owned(),
+            reason: error.to_string(),
+        },
+    ))
+}

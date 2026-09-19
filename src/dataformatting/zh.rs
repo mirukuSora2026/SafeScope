@@ -110,6 +110,20 @@ pub(super) fn render(msg: &Msg) -> String {
             "引擎状态将位于 {state}，处于工作区 {workspace} 之内。\
              那样恢复数据就会落在它所保护的目录树中，因此拒绝注册。"
         ),
+        Msg::PathDestinationExists { path } => {
+            format!("{path} 已存在。移动从不覆盖目标，因为将被丢失的文件没有恢复数据。")
+        }
+        Msg::PlatformCrossFilesystem { from, to } => format!(
+            "{from} 与 {to} 位于不同的文件系统。两者之间的移动无法保证原子性，\
+             因此予以拒绝，而不是以复制加删除代替。"
+        ),
+        Msg::PlatformAtomicRenameUnsupported { reason } => format!(
+            "此文件系统不支持不覆盖的重命名（{reason}）。先检查后重命名会重新引入\
+             该操作本要消除的竞态，因此改为拒绝。"
+        ),
+        Msg::PlatformOperationFailed { operation, reason } => {
+            format!("{operation} 操作失败：{reason}")
+        }
         Msg::WorkspaceOpenFailed { root, reason } => {
             format!("无法打开位于 {root} 的工作区：{reason}")
         }

@@ -501,6 +501,8 @@ dependencies = [
  "cap-std",
  "clap",
  "globset",
+ "libc",
+ "rustix",
  "serde",
  "serde_json",
  "tempfile",

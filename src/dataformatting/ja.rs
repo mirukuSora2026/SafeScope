@@ -121,6 +121,22 @@ SAFESCOPE_DATA_DIR で指定してください。"
             "エンジン状態がワークスペース {workspace} の内側の {state} に置かれます。\
              復旧データが保護対象のツリー内に入るため、登録を拒否します。"
         ),
+        Msg::PathDestinationExists { path } => format!(
+            "{path} はすでに存在します。移動は宛先を上書きしません。失われるファイルの\
+             復旧データがないからです。"
+        ),
+        Msg::PlatformCrossFilesystem { from, to } => format!(
+            "{from} と {to} は別のファイルシステム上にあります。その間の移動は\
+             アトミックにできないため、コピーと削除で代替せず拒否します。"
+        ),
+        Msg::PlatformAtomicRenameUnsupported { reason } => format!(
+            "このファイルシステムは上書きしないリネームに対応していません（{reason}）。\
+             先に確認してから名前を変えると、この操作が閉じようとしている競合が\
+             よみがえるため、代わりに拒否します。"
+        ),
+        Msg::PlatformOperationFailed { operation, reason } => {
+            format!("{operation} 操作が失敗しました: {reason}")
+        }
         Msg::WorkspaceOpenFailed { root, reason } => {
             format!("{root} のワークスペースを開けませんでした: {reason}")
         }
