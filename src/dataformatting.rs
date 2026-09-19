@@ -155,6 +155,12 @@ pub enum Msg {
     PatternTraversal { pattern: String },
     PatternInvalidGlob { pattern: String, reason: String },
 
+    // ── Protected paths ────────────────────────────────────────────────
+    ProtectedEngineState,
+    ProtectedGitHistory,
+    ProtectedPermissionSurface,
+    ProtectedTemporaryName,
+
     // ── Content hash ───────────────────────────────────────────────────
     HashBadLength { len: usize },
     HashNotHexadecimal { text: String },
@@ -301,6 +307,10 @@ mod tests {
                 pattern: "[".into(),
                 reason: "unclosed".into(),
             },
+            Msg::ProtectedEngineState,
+            Msg::ProtectedGitHistory,
+            Msg::ProtectedPermissionSurface,
+            Msg::ProtectedTemporaryName,
             Msg::HashBadLength { len: 3 },
             Msg::HashNotHexadecimal { text: "zz".into() },
             Msg::FaultUnknownValue {

@@ -50,6 +50,16 @@ pub(super) fn render(msg: &Msg) -> String {
         Msg::PatternInvalidGlob { pattern, reason } => {
             format!("정책 패턴 {pattern:?} 이 올바른 glob 이 아닙니다: {reason}")
         }
+        Msg::ProtectedEngineState => "엔진 자신의 정책과 작업 공간 상태입니다. \
+이걸 바꿀 수 있으면 엔진이 자기 판단 근거를 고쳐 쓸 수 있습니다."
+            .to_owned(),
+        Msg::ProtectedGitHistory => "Git 히스토리입니다. 복구 판정이 히스토리가 온전하다는 \
+전제 위에 서 있어서, 여길 고칠 수 있으면 충돌 판정의 의미가 사라집니다."
+            .to_owned(),
+        Msg::ProtectedPermissionSurface => "Claude Code 의 권한 설정입니다. 여기에 쓸 수 \
+있으면 도구 제한을 안에서 풀 수 있습니다."
+            .to_owned(),
+        Msg::ProtectedTemporaryName => "엔진의 원자적 교체가 쓰려고 예약한 이름입니다.".to_owned(),
         Msg::HashBadLength { len } => {
             format!("해시 길이가 잘못됐습니다 ({len} 글자, 64 글자여야 합니다).")
         }

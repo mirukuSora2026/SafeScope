@@ -51,6 +51,18 @@ pub(super) fn render(msg: &Msg) -> String {
         Msg::PatternInvalidGlob { pattern, reason } => {
             format!("The policy pattern {pattern:?} is not a valid glob: {reason}")
         }
+        Msg::ProtectedEngineState => "The engine's own policy and workspace state. \
+Changing it would let the engine rewrite what it checks against."
+            .to_owned(),
+        Msg::ProtectedGitHistory => "Git history. Recovery reasoning assumes it is intact; \
+if it can be rewritten, conflict decisions lose their meaning."
+            .to_owned(),
+        Msg::ProtectedPermissionSurface => "Claude Code's permission settings. Write access \
+here would allow the tool restrictions to be lifted from inside."
+            .to_owned(),
+        Msg::ProtectedTemporaryName => {
+            "A name reserved for the engine's atomic replace.".to_owned()
+        }
         Msg::HashBadLength { len } => {
             format!("The hash has the wrong length ({len} characters; 64 are required).")
         }

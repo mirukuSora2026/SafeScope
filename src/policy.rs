@@ -5,5 +5,7 @@
 //! it at a terminal.
 
 pub mod matcher;
+pub mod protected;
 
 pub use self::matcher::{CaseSensitivity, Pattern, PatternSet};
+pub use self::protected::{ProtectedMatch, ProtectedPaths, ProtectedReason};

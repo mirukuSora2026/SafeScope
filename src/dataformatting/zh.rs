@@ -45,6 +45,16 @@ pub(super) fn render(msg: &Msg) -> String {
         Msg::PatternInvalidGlob { pattern, reason } => {
             format!("策略模式 {pattern:?} 不是有效的 glob：{reason}")
         }
+        Msg::ProtectedEngineState => "引擎自身的策略与工作区状态。\
+若可修改，引擎便能改写自己的判断依据。"
+            .to_owned(),
+        Msg::ProtectedGitHistory => "Git 历史。恢复判定以历史完整为前提，\
+若可被改写，冲突判定将失去意义。"
+            .to_owned(),
+        Msg::ProtectedPermissionSurface => "Claude Code 的权限设置。\
+若可写入，就能从内部解除工具限制。"
+            .to_owned(),
+        Msg::ProtectedTemporaryName => "引擎原子替换所保留的名称。".to_owned(),
         Msg::HashBadLength { len } => {
             format!("哈希长度不正确（{len} 个字符，应为 64 个）。")
         }

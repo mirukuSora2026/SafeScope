@@ -54,6 +54,18 @@ pub(super) fn render(msg: &Msg) -> String {
         Msg::PatternInvalidGlob { pattern, reason } => {
             format!("ポリシーパターン {pattern:?} は有効な glob ではありません: {reason}")
         }
+        Msg::ProtectedEngineState => "エンジン自身のポリシーとワークスペース状態です。\
+変更できると、エンジンが自らの判断根拠を書き換えられてしまいます。"
+            .to_owned(),
+        Msg::ProtectedGitHistory => "Git の履歴です。復旧の判定は履歴が無傷であることを\
+前提としており、書き換え可能だと衝突判定の意味が失われます。"
+            .to_owned(),
+        Msg::ProtectedPermissionSurface => "Claude Code の権限設定です。書き込めると、\
+ツール制限を内側から解除できてしまいます。"
+            .to_owned(),
+        Msg::ProtectedTemporaryName => {
+            "エンジンのアトミック置換が予約している名前です。".to_owned()
+        }
         Msg::HashBadLength { len } => {
             format!("ハッシュの長さが不正です（{len} 文字、64 文字である必要があります）。")
         }

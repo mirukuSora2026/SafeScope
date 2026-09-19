@@ -51,6 +51,18 @@ pub(super) fn render(msg: &Msg) -> String {
         Msg::PatternInvalidGlob { pattern, reason } => {
             format!("Шаблон политики {pattern:?} не является корректным glob: {reason}")
         }
+        Msg::ProtectedEngineState => "Собственная политика движка и состояние рабочего \
+пространства. Возможность их изменить позволила бы движку переписать то, по чему он проверяет."
+            .to_owned(),
+        Msg::ProtectedGitHistory => "История Git. Логика восстановления исходит из её \
+целостности; если её можно переписать, решения о конфликтах теряют смысл."
+            .to_owned(),
+        Msg::ProtectedPermissionSurface => "Настройки разрешений Claude Code. Доступ на \
+запись сюда позволил бы снять ограничения инструментов изнутри."
+            .to_owned(),
+        Msg::ProtectedTemporaryName => {
+            "Имя, зарезервированное для атомарной замены движка.".to_owned()
+        }
         Msg::HashBadLength { len } => {
             format!("Неверная длина хеша ({len} символов, требуется 64).")
         }
