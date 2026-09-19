@@ -1,0 +1,237 @@
+//! The `PreToolUse` hook.
+//!
+//! Claude Code runs this before an edit tool, hands it the pending call on stdin
+//! and reads a decision from stdout. What it can honestly do is narrow:
+//!
+//! - `Write`, `Edit`, `NotebookEdit` carry a path, so they can be judged.
+//! - `Bash` cannot. A shell command is not reliably readable — `sed -i`, a
+//!   redirect, a script — so no attempt is made to parse one. Guessing would
+//!   produce a check that looks like protection and is not.
+//! - Anything else is left alone.
+//!
+//! **A hook is not the boundary.** Per the host's documented behaviour, a hook
+//! that fails with any exit code other than 0 or 2 is non-blocking and the tool
+//! call proceeds; a disabled hook never runs at all. So every check here is also
+//! performed inside the engine. This exists to catch a mistake early and say
+//! something useful about it, not to be the thing standing in the way.
+//!
+//! It runs on every tool call, so it opens no database and hashes nothing: the
+//! approved policy and one `symlink_metadata` are the whole of its work.
+
+use std::io::Read as _;
+use std::path::{Path, PathBuf};
+
+use serde::{Deserialize, Serialize};
+
+use crate::domain::Operation;
+use crate::error::{Error, Result};
+use crate::paths::RelPath;
+use crate::policy::{CompiledPolicy, EvaluationContext, evaluate};
+use crate::registry;
+use crate::store::policy_store::PolicyStore;
+
+/// The pending tool call, as the host sends it.
+///
+/// Unknown fields are accepted on purpose — the opposite of the policy file,
+/// which rejects them. This wire format belongs to the host and will grow; a
+/// hook that broke on a new field would disable itself at the worst moment.
+#[derive(Debug, Deserialize)]
+struct HookInput {
+    #[serde(default)]
+    cwd: Option<String>,
+    #[serde(default)]
+    tool_name: String,
+    #[serde(default)]
+    tool_input: serde_json::Value,
+}
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct HookOutput {
+    hook_specific_output: PreToolUseDecision,
+}
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct PreToolUseDecision {
+    hook_event_name: &'static str,
+    permission_decision: &'static str,
+    permission_decision_reason: String,
+}
+
+/// Reads a pending tool call and writes a decision, or stays silent.
+///
+/// Always exits 0. Exit 2 would block unconditionally, which is not wanted: a
+/// refusal is expressed as a decision so the reason reaches Claude, and anything
+/// this hook cannot judge must fall through to the host's normal permission
+/// flow rather than being blocked by an error.
+pub fn run() -> Result<i32> {
+    let mut raw = String::new();
+    std::io::stdin()
+        .read_to_string(&mut raw)
+        .map_err(Error::from)?;
+
+    // A malformed payload is not this hook's business to adjudicate.
+    let Ok(input) = serde_json::from_str::<HookInput>(&raw) else {
+        return Ok(crate::cli::exit::OK);
+    };
+
+    if let Some(reason) = decide(&input) {
+        let output = HookOutput {
+            hook_specific_output: PreToolUseDecision {
+                hook_event_name: "PreToolUse",
+                permission_decision: "deny",
+                permission_decision_reason: reason,
+            },
+        };
+        println!("{}", serde_json::to_string(&output).expect("serialisable"));
+    }
+    Ok(crate::cli::exit::OK)
+}
+
+/// The refusal reason, or `None` to say nothing.
+///
+/// Saying nothing is the common case and the right default: it leaves the host's
+/// normal permission flow in charge. An explicit `allow` would quietly waive
+/// whatever else the user had configured.
+fn decide(input: &HookInput) -> Option<String> {
+    let absolute = target_path(&input.tool_name, &input.tool_input)?;
+    let cwd = input.cwd.as_ref().map(PathBuf::from)?;
+    let root = workspace_root(&cwd)?;
+
+    let relative = absolute.strip_prefix(&root).ok()?;
+    // Outside the workspace, SafeScope has nothing to say.
+    let path = RelPath::parse(&relative.to_string_lossy()).ok()?;
+
+    let registration = registry::load(&root).ok()?;
+    let store = PolicyStore::new(&registration.state_paths().ok()?);
+
+    let Some(approved) = store.current().ok()? else {
+        // Registered but never approved: nothing may be changed yet, and saying
+        // so is more useful than letting the write land and be unrecorded.
+        return Some(
+            crate::dataformatting::Msg::HintFillInAllowThenApprove {
+                policy: registration.policy_path().display().to_string(),
+            }
+            .to_string(),
+        );
+    };
+
+    let compiled = CompiledPolicy::compile(approved.policy).ok()?;
+    let operation = infer_operation(&absolute);
+    let context = EvaluationContext {
+        // Temporary approvals belong to a task, and a hook is not inside one.
+        grants: &[],
+        task: crate::ids::TaskId::new(),
+        policy_version: approved.version,
+        now: std::time::SystemTime::now(),
+    };
+
+    match evaluate(&path, operation, &compiled, &context).into_result() {
+        Ok(_) => None,
+        Err(denial) => Some(match denial.hint() {
+            Some(hint) => format!("{}\n{hint}", denial.message()),
+            None => denial.message().to_owned(),
+        }),
+    }
+}
+
+/// The path a tool is about to write to, if it has one.
+fn target_path(tool_name: &str, tool_input: &serde_json::Value) -> Option<PathBuf> {
+    let field = match tool_name {
+        "Write" | "Edit" | "MultiEdit" => "file_path",
+        "NotebookEdit" => "notebook_path",
+        // Bash and everything else: no path this hook can trust.
+        _ => return None,
+    };
+    tool_input.get(field)?.as_str().map(PathBuf::from)
+}
+
+/// Walks up from `start` looking for a registered workspace.
+fn workspace_root(start: &Path) -> Option<PathBuf> {
+    start
+        .ancestors()
+        .find(|directory| {
+            directory
+                .join(registry::CONFIG_DIR)
+                .join(registry::ID_FILE)
+                .is_file()
+        })
+        .map(Path::to_path_buf)
+}
+
+/// Whether the pending write creates or replaces.
+///
+/// One `symlink_metadata` call, no hashing: this runs on every tool call, and a
+/// large file would otherwise be read from disk before every edit.
+fn infer_operation(absolute: &Path) -> Operation {
+    match std::fs::symlink_metadata(absolute) {
+        Ok(_) => Operation::Replace,
+        Err(_) => Operation::Create,
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use serde_json::json;
+
+    #[test]
+    fn reads_the_path_from_edit_tools() {
+        for tool in ["Write", "Edit", "MultiEdit"] {
+            let input = json!({ "file_path": "/p/src/a.rs" });
+            assert_eq!(
+                target_path(tool, &input),
+                Some(PathBuf::from("/p/src/a.rs")),
+                "{tool}"
+            );
+        }
+        assert_eq!(
+            target_path("NotebookEdit", &json!({ "notebook_path": "/p/n.ipynb" })),
+            Some(PathBuf::from("/p/n.ipynb"))
+        );
+    }
+
+    #[test]
+    fn declines_to_judge_a_shell_command() {
+        // `sed -i`, a redirect, a script that writes: none of these can be read
+        // reliably, and a check that looks like protection without being it is
+        // worse than none.
+        let input = json!({ "command": "sed -i s/a/b/ src/main.rs" });
+        assert_eq!(target_path("Bash", &input), None);
+    }
+
+    #[test]
+    fn ignores_tools_without_a_path() {
+        assert_eq!(
+            target_path("Read", &json!({ "file_path": "/p/a.rs" })),
+            None
+        );
+        assert_eq!(target_path("Grep", &json!({})), None);
+        assert_eq!(
+            target_path("Write", &json!({})),
+            None,
+            "no path, no opinion"
+        );
+    }
+
+    #[test]
+    fn says_nothing_without_a_working_directory() {
+        let input = HookInput {
+            cwd: None,
+            tool_name: "Write".to_owned(),
+            tool_input: json!({ "file_path": "/p/src/a.rs" }),
+        };
+        assert!(decide(&input).is_none());
+    }
+
+    #[test]
+    fn says_nothing_outside_a_workspace() {
+        let input = HookInput {
+            cwd: Some("/definitely/not/a/workspace".to_owned()),
+            tool_name: "Write".to_owned(),
+            tool_input: json!({ "file_path": "/definitely/not/a/workspace/a.rs" }),
+        };
+        assert!(decide(&input).is_none());
+    }
+}

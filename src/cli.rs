@@ -6,6 +6,7 @@
 
 pub mod approve;
 pub mod check;
+pub mod hook;
 
 use std::path::PathBuf;
 
@@ -49,6 +50,11 @@ pub enum Command {
         #[command(subcommand)]
         action: PolicyAction,
     },
+    /// Answer a Claude Code PreToolUse hook on stdin.
+    ///
+    /// Reads the pending tool call as JSON and writes a decision, or stays
+    /// silent and lets the host's normal permission flow decide.
+    Hook,
     /// Explain whether an operation on a path would be permitted.
     ///
     /// Changes nothing. This is the command to reach for when a refusal is
@@ -104,6 +110,7 @@ fn dispatch(cli: &Cli) -> Result<i32> {
         Command::Policy {
             action: PolicyAction::Show,
         } => approve::show(&cli.workspace).map(|()| exit::OK),
+        Command::Hook => hook::run(),
         Command::Check { path, op } => check::run(&cli.workspace, path, op),
     }
 }

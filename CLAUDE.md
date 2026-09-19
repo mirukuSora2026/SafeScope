@@ -50,6 +50,13 @@ the tests.
 - Column alignment goes through `dataformatting::pad`, not `{:<n}`. Format width
   counts characters, so a Korean or Japanese label leaves every later column
   ragged.
+- The hook is not the boundary. Per the host's documented behaviour a hook that
+  exits with anything but 0 or 2 is non-blocking, and a disabled hook never runs,
+  so every check it performs is also performed inside the engine. Never write a
+  check that exists only in the hook.
+- Never parse a shell command to decide whether it writes. `sed -i`, a redirect
+  and a script are not reliably readable, and a check that looks like protection
+  without being it is worse than none. Report the gap in the status output.
 
 ## Layout
 
@@ -79,13 +86,14 @@ src/
 ├─ registry.rs         .safescope/ bootstrap and workspace identity
 ├─ store.rs            state layout, atomic writes
 │  └─ policy_store.rs  approved policy versions
-└─ cli.rs              init, policy approve/show, check
+└─ cli.rs              init, policy approve/show, check, hook
    ├─ approve.rs
-   └─ check.rs
+   ├─ check.rs
+   └─ hook.rs           the PreToolUse hook
 ```
 
 Modules still to come: `budget`, `planner`, `executor`, `snapshot`, `journal`,
-`recovery`, `platform`, and the `hook` and `mcp` adapters.
+`recovery`, `platform`, and the `mcp` adapter.
 
 ## Commands
 
