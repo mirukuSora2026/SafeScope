@@ -19,9 +19,8 @@
 use crate::dataformatting::Msg;
 use crate::domain::{Observation, Operation, PathState, Phase};
 use crate::error::{Denial, Error, ErrorCode, Result};
-use crate::executor::Executor;
 use crate::ids::{OperationId, TaskId};
-use crate::journal::{Journal, OperationKind, OperationRecord};
+use crate::journal::{Journal, OperationRecord};
 use crate::path_guard::Workspace;
 use crate::planner::{ChangePlan, ChangeRequest, Planner};
 use crate::policy::{Authority, CompiledPolicy, EvaluationContext, PolicyVersion};
@@ -35,11 +34,15 @@ pub struct UndoPlan {
     pub plan: ChangePlan,
 }
 
-/// Builds and applies reversals.
+/// Builds reversals.
+///
+/// Only reads, so it borrows the journal shared. Applying the result goes
+/// through the ordinary executor: a reversal is a file change and deserves the
+/// same steps, the same records and the same crash behaviour as any other.
 pub struct Undo<'a> {
     pub workspace: &'a Workspace,
     pub policy: &'a CompiledPolicy,
-    pub journal: &'a mut Journal,
+    pub journal: &'a Journal,
     pub snapshots: &'a ContentStore,
     pub staging: &'a ContentStore,
 }
@@ -81,19 +84,6 @@ impl Undo<'_> {
             reverses: record.id,
             plan,
         })
-    }
-
-    /// Carries out a prepared reversal.
-    pub fn apply(&mut self, undo: &UndoPlan) -> Result<OperationRecord> {
-        let limits = *self.policy.budget();
-        Executor {
-            workspace: self.workspace,
-            journal: self.journal,
-            limits: &limits,
-            snapshots: self.snapshots,
-            staging: self.staging,
-        }
-        .apply_reversing(&undo.plan, OperationKind::Undo, Some(undo.reverses), None)
     }
 
     /// Confirms the workspace still holds what the operation left behind.

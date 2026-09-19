@@ -37,6 +37,7 @@ pub mod platform;
 pub mod policy;
 pub mod recovery;
 pub mod registry;
+pub mod session;
 pub mod store;
 pub mod undo;
 

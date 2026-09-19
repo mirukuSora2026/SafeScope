@@ -55,6 +55,10 @@ the tests.
   exits with anything but 0 or 2 is non-blocking, and a disabled hook never runs,
   so every check it performs is also performed inside the engine. Never write a
   check that exists only in the hook.
+- Callers go through `WriteSession`, not through Planner and Executor directly.
+  The session holds the workspace lock for its lifetime, which is what makes the
+  budget's check-then-reserve sound, and it is the one place that knows the
+  executor's stores must be the planner's stores.
 - Undo is not a new grant. It reverses what the engine did under an approved
   policy, so it skips scope evaluation (`Authority::Reversal`) and does not spend
   the change budget. Protected paths still apply. Checking either would trap
@@ -93,6 +97,7 @@ src/
 │  └─ evaluate.rs      protected → deny → allow → grant → not covered
 ├─ planner.rs          request → checked plan; stages payload, takes snapshot
 ├─ executor.rs         applies a plan in the order the invariants require
+├─ session.rs          WriteSession — holds the lock, assembles the engine
 ├─ budget.rs           how much a task may change (I5)
 ├─ undo.rs             reversing the last recorded operation
 ├─ recovery.rs         what happened when the engine stopped mid-operation
@@ -104,6 +109,7 @@ src/
 ├─ store.rs            state layout, atomic writes
 │  ├─ content.rs       content-addressed blobs: snapshots (I2) and payloads
 │  ├─ lock.rs          one writer at a time, per workspace
+│  ├─ task_store.rs    which task the workspace is on
 │  └─ policy_store.rs  approved policy versions
 └─ cli.rs              init, policy approve/show, check, hook
    ├─ approve.rs
@@ -111,7 +117,7 @@ src/
    └─ hook.rs           the PreToolUse hook
 ```
 
-Modules still to come: the `mcp` adapter, and the CLI commands for plan, apply,
+Modules still to come: the `mcp` adapter and the CLI commands for plan, apply,
 undo, status and recover.
 
 ## Commands

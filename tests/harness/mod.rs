@@ -7,7 +7,7 @@ use std::time::SystemTime;
 
 use safescope::executor::{Executor, RequestKey};
 use safescope::ids::{TaskId, WorkspaceId};
-use safescope::journal::Journal;
+use safescope::journal::{Journal, OperationKind};
 use safescope::path_guard::Workspace;
 use safescope::paths::RelPath;
 use safescope::planner::{ChangePlan, ChangeRequest, Planner};
@@ -130,20 +130,21 @@ impl Harness {
         let plan = Undo {
             workspace: &self.workspace,
             policy: &self.policy,
-            journal: &mut self.journal,
+            journal: &self.journal,
             snapshots: &snapshots,
             staging: &staging,
         }
         .prepare(self.task, PolicyVersion::FIRST)?;
 
-        Undo {
+        let limits = *self.policy.budget();
+        Executor {
             workspace: &self.workspace,
-            policy: &self.policy,
             journal: &mut self.journal,
+            limits: &limits,
             snapshots: &snapshots,
             staging: &staging,
         }
-        .apply(&plan)
+        .apply_reversing(&plan.plan, OperationKind::Undo, Some(plan.reverses), None)
         .map(|_| ())
     }
 

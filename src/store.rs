@@ -12,6 +12,7 @@
 pub mod content;
 pub mod lock;
 pub mod policy_store;
+pub mod task_store;
 
 use std::fs;
 use std::io::Write as _;
