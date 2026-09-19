@@ -59,7 +59,8 @@ src/
 ├─ paths.rs            RelPath — the validated relative path type
 ├─ hash.rs             ContentHash (BLAKE3), content addressing
 ├─ ids.rs              typed identifiers (TaskId, PlanId, GrantId, …)
-├─ domain.rs           Operation, OpSet, FileState, Transition, Observation
+├─ domain.rs           FileState, PathState, Transition, Observation
+│  └─ operation.rs     Operation, OpSet
 └─ fault.rs            crash injection points (feature `fault-injection`)
 ```
 
