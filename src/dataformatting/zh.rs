@@ -51,6 +51,23 @@ pub(super) fn render(msg: &Msg) -> String {
         Msg::PolicySchemaUnsupported { found, supported } => {
             format!("不支持的策略 schema_version {found}；此版本支持 {supported}。")
         }
+        Msg::StoreDataDirectoryUnavailable => "找不到用于存放引擎状态的目录。\
+请设置 SAFESCOPE_DATA_DIR 指定一个。"
+            .to_owned(),
+        Msg::StoreWriteFailed { path, reason } => {
+            format!("无法将引擎状态写入 {path}：{reason}")
+        }
+        Msg::StoreReadFailed { path, reason } => {
+            format!("无法从 {path} 读取引擎状态：{reason}")
+        }
+        Msg::StoreCorrupted { path, reason } => format!(
+            "位于 {path} 的引擎状态无法读取：{reason}。未自动修复，\
+             因为对损坏状态的猜测正是丢失完好数据的途径。"
+        ),
+        Msg::StoreStateInsideWorkspace { state, workspace } => format!(
+            "引擎状态将位于 {state}，处于工作区 {workspace} 之内。\
+             那样恢复数据就会落在它所保护的目录树中，因此拒绝注册。"
+        ),
         Msg::WorkspaceOpenFailed { root, reason } => {
             format!("无法打开位于 {root} 的工作区：{reason}")
         }

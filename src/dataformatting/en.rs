@@ -57,6 +57,23 @@ pub(super) fn render(msg: &Msg) -> String {
         Msg::PolicySchemaUnsupported { found, supported } => format!(
             "Unsupported policy schema_version {found}; this build understands {supported}."
         ),
+        Msg::StoreDataDirectoryUnavailable => "No directory is available for engine state. \
+Set SAFESCOPE_DATA_DIR to choose one."
+            .to_owned(),
+        Msg::StoreWriteFailed { path, reason } => {
+            format!("Could not write engine state to {path}: {reason}")
+        }
+        Msg::StoreReadFailed { path, reason } => {
+            format!("Could not read engine state from {path}: {reason}")
+        }
+        Msg::StoreCorrupted { path, reason } => format!(
+            "Engine state at {path} is not readable: {reason}. It was not repaired \
+             automatically, because guessing at damaged state is how good data is lost."
+        ),
+        Msg::StoreStateInsideWorkspace { state, workspace } => format!(
+            "Engine state would live at {state}, inside the workspace {workspace}. Snapshots \
+             would then sit inside the tree they protect, so registration is refused."
+        ),
         Msg::WorkspaceOpenFailed { root, reason } => {
             format!("The workspace at {root} could not be opened: {reason}")
         }

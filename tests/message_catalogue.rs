@@ -66,6 +66,23 @@ fn every_language_renders_every_message() {
             found: 9,
             supported: 1,
         },
+        Msg::StoreDataDirectoryUnavailable,
+        Msg::StoreWriteFailed {
+            path: "/s/x".into(),
+            reason: "disk full".into(),
+        },
+        Msg::StoreReadFailed {
+            path: "/s/x".into(),
+            reason: "denied".into(),
+        },
+        Msg::StoreCorrupted {
+            path: "/s/x".into(),
+            reason: "bad json".into(),
+        },
+        Msg::StoreStateInsideWorkspace {
+            state: "/p/.s".into(),
+            workspace: "/p".into(),
+        },
         Msg::WorkspaceOpenFailed {
             root: "/p".into(),
             reason: "no such file".into(),
@@ -150,7 +167,7 @@ fn every_language_renders_every_message() {
     // omission.
     assert_eq!(
         samples.len(),
-        50,
+        55,
         "add the new Msg variant to this list, then update the count"
     );
 

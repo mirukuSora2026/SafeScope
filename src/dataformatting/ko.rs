@@ -57,6 +57,23 @@ pub(super) fn render(msg: &Msg) -> String {
             "지원하지 않는 정책 schema_version {found} 입니다. 이 빌드는 {supported} 을 \
              이해합니다."
         ),
+        Msg::StoreDataDirectoryUnavailable => "엔진 상태를 둘 디렉터리를 찾을 수 없습니다. \
+SAFESCOPE_DATA_DIR 로 지정하세요."
+            .to_owned(),
+        Msg::StoreWriteFailed { path, reason } => {
+            format!("{path} 에 엔진 상태를 쓰지 못했습니다: {reason}")
+        }
+        Msg::StoreReadFailed { path, reason } => {
+            format!("{path} 에서 엔진 상태를 읽지 못했습니다: {reason}")
+        }
+        Msg::StoreCorrupted { path, reason } => format!(
+            "{path} 의 엔진 상태를 읽을 수 없습니다: {reason}. 자동으로 고치지 않았습니다. \
+             손상된 상태를 추측으로 복구하는 것이 멀쩡한 데이터를 잃는 경로입니다."
+        ),
+        Msg::StoreStateInsideWorkspace { state, workspace } => format!(
+            "엔진 상태가 작업 공간 {workspace} 안의 {state} 에 놓이게 됩니다. 그러면 복구 \
+             자료가 자기가 보호하는 트리 안에 들어가므로 등록을 거부합니다."
+        ),
         Msg::WorkspaceOpenFailed { root, reason } => {
             format!("{root} 의 작업 공간을 열지 못했습니다: {reason}")
         }

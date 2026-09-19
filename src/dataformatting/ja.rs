@@ -61,6 +61,23 @@ pub(super) fn render(msg: &Msg) -> String {
             "サポートされていないポリシーの schema_version {found} です。\
              このビルドが理解するのは {supported} です。"
         ),
+        Msg::StoreDataDirectoryUnavailable => "エンジン状態を置くディレクトリが見つかりません。\
+SAFESCOPE_DATA_DIR で指定してください。"
+            .to_owned(),
+        Msg::StoreWriteFailed { path, reason } => {
+            format!("{path} にエンジン状態を書き込めませんでした: {reason}")
+        }
+        Msg::StoreReadFailed { path, reason } => {
+            format!("{path} からエンジン状態を読み込めませんでした: {reason}")
+        }
+        Msg::StoreCorrupted { path, reason } => format!(
+            "{path} のエンジン状態を読み取れません: {reason}。自動的には修復していません。\
+             壊れた状態を推測で直すことこそ、無事なデータを失う道だからです。"
+        ),
+        Msg::StoreStateInsideWorkspace { state, workspace } => format!(
+            "エンジン状態がワークスペース {workspace} の内側の {state} に置かれます。\
+             復旧データが保護対象のツリー内に入るため、登録を拒否します。"
+        ),
         Msg::WorkspaceOpenFailed { root, reason } => {
             format!("{root} のワークスペースを開けませんでした: {reason}")
         }

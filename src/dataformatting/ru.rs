@@ -57,6 +57,24 @@ pub(super) fn render(msg: &Msg) -> String {
         Msg::PolicySchemaUnsupported { found, supported } => format!(
             "Неподдерживаемая версия схемы политики {found}; эта сборка понимает {supported}."
         ),
+        Msg::StoreDataDirectoryUnavailable => "Не найден каталог для состояния движка. \
+Укажите его через SAFESCOPE_DATA_DIR."
+            .to_owned(),
+        Msg::StoreWriteFailed { path, reason } => {
+            format!("Не удалось записать состояние движка в {path}: {reason}")
+        }
+        Msg::StoreReadFailed { path, reason } => {
+            format!("Не удалось прочитать состояние движка из {path}: {reason}")
+        }
+        Msg::StoreCorrupted { path, reason } => format!(
+            "Состояние движка в {path} нечитаемо: {reason}. Оно не было исправлено \
+             автоматически: догадки о повреждённом состоянии — это путь к потере целых данных."
+        ),
+        Msg::StoreStateInsideWorkspace { state, workspace } => format!(
+            "Состояние движка оказалось бы в {state}, внутри рабочего пространства \
+             {workspace}. Тогда данные восстановления лежали бы внутри дерева, которое они \
+             защищают, поэтому регистрация отклонена."
+        ),
         Msg::WorkspaceOpenFailed { root, reason } => {
             format!("Не удалось открыть рабочее пространство в {root}: {reason}")
         }

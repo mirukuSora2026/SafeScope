@@ -194,6 +194,25 @@ pub enum Msg {
         supported: u32,
     },
 
+    // ── Engine state store ─────────────────────────────────────────────
+    StoreDataDirectoryUnavailable,
+    StoreWriteFailed {
+        path: String,
+        reason: String,
+    },
+    StoreReadFailed {
+        path: String,
+        reason: String,
+    },
+    StoreCorrupted {
+        path: String,
+        reason: String,
+    },
+    StoreStateInsideWorkspace {
+        state: String,
+        workspace: String,
+    },
+
     // ── Workspace and path resolution ──────────────────────────────────
     WorkspaceOpenFailed {
         root: String,
