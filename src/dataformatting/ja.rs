@@ -61,6 +61,26 @@ pub(super) fn render(msg: &Msg) -> String {
             "サポートされていないポリシーの schema_version {found} です。\
              このビルドが理解するのは {supported} です。"
         ),
+        Msg::ScopeNotCovered { path } => {
+            format!("{path} は許可範囲のどのルールにも一致しません。")
+        }
+        Msg::ScopeDeniedByRule { path, pattern } => {
+            format!("{path} は deny ルール {pattern:?} により拒否されました。")
+        }
+        Msg::ScopeOperationNotAllowed {
+            path,
+            operation,
+            allowed,
+        } => format!(
+            "{path} は変更できますが、{operation} は許可されていません。\
+             ここで許可されている操作: {allowed}。"
+        ),
+        Msg::HintExpansionMayBeRequested => "このパスが本当に必要であれば、同じ編集を\
+やり直すのではなく safescope で範囲の拡張を要求してください。"
+            .to_owned(),
+        Msg::HintPolicyDenyIsFinal => "deny ルールは承認では解除できません。誤りであれば\
+ポリシーファイルを修正して承認してください。"
+            .to_owned(),
         Msg::PolicyNoAllowRules => "ポリシーに allow ルールがないため、何も変更できません。\
 意図的であれば、空のリストのままにせず明示してください。"
             .to_owned(),

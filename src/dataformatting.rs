@@ -194,6 +194,22 @@ pub enum Msg {
         supported: u32,
     },
 
+    // ── Scope evaluation ───────────────────────────────────────────────
+    ScopeNotCovered {
+        path: String,
+    },
+    ScopeDeniedByRule {
+        path: String,
+        pattern: String,
+    },
+    ScopeOperationNotAllowed {
+        path: String,
+        operation: String,
+        allowed: String,
+    },
+    HintExpansionMayBeRequested,
+    HintPolicyDenyIsFinal,
+
     // ── Policy validation ──────────────────────────────────────────────
     PolicyNoAllowRules,
     PolicyEmptyDefaultOps,

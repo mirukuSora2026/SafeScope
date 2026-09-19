@@ -57,6 +57,25 @@ pub(super) fn render(msg: &Msg) -> String {
         Msg::PolicySchemaUnsupported { found, supported } => format!(
             "Неподдерживаемая версия схемы политики {found}; эта сборка понимает {supported}."
         ),
+        Msg::ScopeNotCovered { path } => {
+            format!("{path} не подпадает ни под одно правило разрешённой области.")
+        }
+        Msg::ScopeDeniedByRule { path, pattern } => {
+            format!("{path} отклонён правилом deny {pattern:?}.")
+        }
+        Msg::ScopeOperationNotAllowed {
+            path,
+            operation,
+            allowed,
+        } => format!(
+            "{path} можно изменять, но не операцией {operation}. Здесь разрешено: {allowed}."
+        ),
+        Msg::HintExpansionMayBeRequested => "Если этот путь действительно нужен, запросите \
+расширение области через safescope, а не повторяйте ту же правку."
+            .to_owned(),
+        Msg::HintPolicyDenyIsFinal => "Правило deny нельзя снять одобрением. Если это ошибка, \
+измените файл политики и утвердите его."
+            .to_owned(),
         Msg::PolicyNoAllowRules => "В политике нет правил allow, поэтому ничего нельзя \
 изменить. Если это намеренно, укажите это явно, а не оставляйте список пустым."
             .to_owned(),

@@ -66,6 +66,20 @@ fn every_language_renders_every_message() {
             found: 9,
             supported: 1,
         },
+        Msg::ScopeNotCovered {
+            path: "src/a.rs".into(),
+        },
+        Msg::ScopeDeniedByRule {
+            path: "a/.env".into(),
+            pattern: "**/.env".into(),
+        },
+        Msg::ScopeOperationNotAllowed {
+            path: "src/a.rs".into(),
+            operation: "move".into(),
+            allowed: "create, replace".into(),
+        },
+        Msg::HintExpansionMayBeRequested,
+        Msg::HintPolicyDenyIsFinal,
         Msg::PolicyNoAllowRules,
         Msg::PolicyEmptyDefaultOps,
         Msg::PolicyRuleGrantsNothing {
@@ -119,7 +133,7 @@ fn every_language_renders_every_message() {
     // omission.
     assert_eq!(
         samples.len(),
-        39,
+        44,
         "add the new Msg variant to this list, then update the count"
     );
 

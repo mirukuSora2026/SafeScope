@@ -57,6 +57,26 @@ pub(super) fn render(msg: &Msg) -> String {
             "지원하지 않는 정책 schema_version {found} 입니다. 이 빌드는 {supported} 을 \
              이해합니다."
         ),
+        Msg::ScopeNotCovered { path } => {
+            format!("{path} 은 허용 범위의 어떤 규칙에도 해당하지 않습니다.")
+        }
+        Msg::ScopeDeniedByRule { path, pattern } => {
+            format!("{path} 은 deny 규칙 {pattern:?} 에 의해 거부됐습니다.")
+        }
+        Msg::ScopeOperationNotAllowed {
+            path,
+            operation,
+            allowed,
+        } => format!(
+            "{path} 은 바꿀 수 있지만 {operation} 은 허용되지 않습니다. 여기서 허용된 연산: \
+             {allowed}."
+        ),
+        Msg::HintExpansionMayBeRequested => "이 경로가 꼭 필요하다면 같은 편집을 다시 \
+시도하지 말고 safescope 로 범위 확장을 요청하세요."
+            .to_owned(),
+        Msg::HintPolicyDenyIsFinal => "deny 규칙은 승인으로 풀 수 없습니다. 잘못됐다면 정책 \
+파일을 고치고 승인하세요."
+            .to_owned(),
         Msg::PolicyNoAllowRules => "정책에 allow 규칙이 없어서 아무것도 바꿀 수 없습니다. \
 의도한 것이라면 빈 목록으로 두지 말고 명시하세요."
             .to_owned(),

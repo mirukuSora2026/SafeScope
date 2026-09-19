@@ -5,6 +5,7 @@
 //! it at a terminal.
 
 pub mod defaults;
+pub mod evaluate;
 pub mod file;
 pub mod grant;
 pub mod matcher;
@@ -13,6 +14,9 @@ pub mod protected;
 pub mod validate;
 
 pub use self::defaults::SCHEMA_VERSION;
+pub use self::evaluate::{
+    Decision, EvaluationContext, MoveDecision, RuleRef, RuleSource, evaluate, evaluate_move,
+};
 pub use self::file::{PolicyDocument, PolicyFile};
 pub use self::grant::{ApprovalSource, Grant};
 pub use self::matcher::{CaseSensitivity, Pattern, PatternSet};

@@ -51,6 +51,25 @@ pub(super) fn render(msg: &Msg) -> String {
         Msg::PolicySchemaUnsupported { found, supported } => {
             format!("不支持的策略 schema_version {found}；此版本支持 {supported}。")
         }
+        Msg::ScopeNotCovered { path } => {
+            format!("{path} 不匹配允许范围中的任何规则。")
+        }
+        Msg::ScopeDeniedByRule { path, pattern } => {
+            format!("{path} 被 deny 规则 {pattern:?} 拒绝。")
+        }
+        Msg::ScopeOperationNotAllowed {
+            path,
+            operation,
+            allowed,
+        } => {
+            format!("{path} 可以修改，但不允许 {operation}。此处允许的操作：{allowed}。")
+        }
+        Msg::HintExpansionMayBeRequested => "如果确实需要此路径，请通过 safescope 申请扩大范围，\
+而不是重试同一次编辑。"
+            .to_owned(),
+        Msg::HintPolicyDenyIsFinal => "deny 规则无法通过审批解除。如果这是错误的，\
+请修改策略文件并重新批准。"
+            .to_owned(),
         Msg::PolicyNoAllowRules => "策略中没有 allow 规则，因此什么都无法更改。\
 如果这是有意的，请明确说明，而不是留空列表。"
             .to_owned(),

@@ -57,6 +57,23 @@ pub(super) fn render(msg: &Msg) -> String {
         Msg::PolicySchemaUnsupported { found, supported } => format!(
             "Unsupported policy schema_version {found}; this build understands {supported}."
         ),
+        Msg::ScopeNotCovered { path } => {
+            format!("{path} matches no rule in the allowed scope.")
+        }
+        Msg::ScopeDeniedByRule { path, pattern } => {
+            format!("{path} is refused by the deny rule {pattern:?}.")
+        }
+        Msg::ScopeOperationNotAllowed {
+            path,
+            operation,
+            allowed,
+        } => format!("{path} may be changed, but not by {operation}. Allowed here: {allowed}."),
+        Msg::HintExpansionMayBeRequested => "If this path really is needed, ask for a scope \
+expansion through safescope rather than retrying the same edit."
+            .to_owned(),
+        Msg::HintPolicyDenyIsFinal => "A deny rule cannot be lifted by an approval. Change the \
+policy file and approve it if this is wrong."
+            .to_owned(),
         Msg::PolicyNoAllowRules => "The policy has no allow rules, so nothing could ever \
 be changed. If that is intended, say so explicitly rather than leaving the list empty."
             .to_owned(),
