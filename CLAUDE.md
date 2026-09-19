@@ -45,7 +45,11 @@ the tests.
   that takes a path as `&str`.
 - Test names are English `snake_case` sentences describing the behaviour, not the
   function under test.
-- Files stay under 500 lines.
+- Files stay under 500 lines. Moving a module's tests to `tests/` is usually the
+  right way to get back under it, and often improves them.
+- Column alignment goes through `dataformatting::pad`, not `{:<n}`. Format width
+  counts characters, so a Korean or Japanese label leaves every later column
+  ragged.
 
 ## Layout
 
@@ -61,11 +65,27 @@ src/
 ├─ ids.rs              typed identifiers (TaskId, PlanId, GrantId, …)
 ├─ domain.rs           FileState, PathState, Transition, Observation
 │  └─ operation.rs     Operation, OpSet
-└─ fault.rs            crash injection points (feature `fault-injection`)
+├─ fault.rs            crash injection points (feature `fault-injection`)
+├─ policy/             scope and budget rules
+│  ├─ defaults.rs      what an omitted field means
+│  ├─ file.rs          the TOML schema, parsed with line numbers
+│  ├─ normalized.rs    the desugared form that gets approved and stored
+│  ├─ validate.rs      checks run at approval time
+│  ├─ matcher.rs       glob compilation
+│  ├─ protected.rs     paths no rule can unlock
+│  ├─ grant.rs         temporary approvals
+│  └─ evaluate.rs      protected → deny → allow → grant → not covered
+├─ path_guard.rs       Workspace, Resolved — filesystem resolution (I4)
+├─ registry.rs         .safescope/ bootstrap and workspace identity
+├─ store.rs            state layout, atomic writes
+│  └─ policy_store.rs  approved policy versions
+└─ cli.rs              init, policy approve/show, check
+   ├─ approve.rs
+   └─ check.rs
 ```
 
-Modules still to come: `policy`, `path_guard`, `budget`, `planner`, `executor`,
-`snapshot`, `journal`, `recovery`, `approval`, `platform`, `adapters`.
+Modules still to come: `budget`, `planner`, `executor`, `snapshot`, `journal`,
+`recovery`, `platform`, and the `hook` and `mcp` adapters.
 
 ## Commands
 

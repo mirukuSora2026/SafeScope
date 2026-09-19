@@ -20,6 +20,8 @@ mod zh;
 use std::fmt;
 use std::sync::atomic::{AtomicU8, Ordering};
 
+use unicode_width::UnicodeWidthStr;
+
 /// Languages the catalogue is translated into.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Default)]
 pub enum Language {
@@ -127,6 +129,37 @@ pub fn set_language(language: Language) {
     CURRENT.store(language.index(), Ordering::Relaxed);
 }
 
+/// Short labels used to lay out command output.
+///
+/// Grouped into one [`Msg`] variant rather than one variant each, so the
+/// catalogue does not acquire a dozen near-identical entries and the sample list
+/// in the coverage test stays readable.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[non_exhaustive]
+pub enum Label {
+    Allowed,
+    Refused,
+    NotCovered,
+    Path,
+    Operation,
+    Policy,
+    PolicyVersion,
+    EvaluationSteps,
+    StepProtected,
+    StepDeny,
+    StepAllow,
+    StepGrant,
+    NoMatch,
+    Outcome,
+    ExpansionPossible,
+    ExpansionImpossible,
+    CurrentScope,
+    Nothing,
+    Warnings,
+    Approved,
+    UnapprovedEdits,
+}
+
 /// A message that can be shown to a person.
 ///
 /// Variants carry their parameters as typed fields rather than pre-formatted
@@ -193,6 +226,9 @@ pub enum Msg {
         found: u32,
         supported: u32,
     },
+
+    /// A short layout label; see [`Label`].
+    Label(Label),
 
     // ── Workspace registration ─────────────────────────────────────────
     WorkspaceAlreadyRegistered {
@@ -357,6 +393,22 @@ impl From<Msg> for String {
     }
 }
 
+/// Pads `text` to `columns` terminal cells.
+///
+/// `{:<12}` counts characters, not display width, so a Korean or Japanese label
+/// comes out several cells short and every column after it goes ragged. Since
+/// the whole point of the catalogue is that these languages are first-class, the
+/// padding has to measure what the terminal will actually draw.
+pub fn pad(text: &str, columns: usize) -> String {
+    let width = UnicodeWidthStr::width(text);
+    let mut padded = String::with_capacity(text.len() + columns.saturating_sub(width));
+    padded.push_str(text);
+    for _ in width..columns {
+        padded.push(' ');
+    }
+    padded
+}
+
 /// Formats a byte count with binary prefixes.
 ///
 /// Configuration exposes limits such as `max_file_bytes = 8388608`; nobody reads
@@ -414,6 +466,16 @@ mod tests {
         for language in Language::ALL {
             assert_eq!(Language::from_index(language.index()), language);
         }
+    }
+
+    #[test]
+    fn pads_by_display_width_not_character_count() {
+        assert_eq!(pad("Path", 8), "Path    ");
+        // Four CJK characters draw as eight cells, so no padding is owed.
+        assert_eq!(pad("\u{acbd}\u{b85c}", 4), "\u{acbd}\u{b85c}");
+        assert_eq!(pad("\u{acbd}\u{b85c}", 6), "\u{acbd}\u{b85c}  ");
+        // Never truncates: a label longer than the column stays whole.
+        assert_eq!(pad("Operation", 4), "Operation");
     }
 
     #[test]

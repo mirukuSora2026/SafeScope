@@ -1,6 +1,6 @@
 //! Russian messages.
 
-use crate::dataformatting::Msg;
+use crate::dataformatting::{Label, Msg};
 
 pub(super) fn render(msg: &Msg) -> String {
     match msg {
@@ -57,6 +57,30 @@ pub(super) fn render(msg: &Msg) -> String {
         Msg::PolicySchemaUnsupported { found, supported } => format!(
             "Неподдерживаемая версия схемы политики {found}; эта сборка понимает {supported}."
         ),
+        Msg::Label(label) => match label {
+            Label::Allowed => "Разрешено",
+            Label::Refused => "Отклонено",
+            Label::NotCovered => "Не покрыто",
+            Label::Path => "Путь",
+            Label::Operation => "Операция",
+            Label::Policy => "Политика",
+            Label::PolicyVersion => "Версия",
+            Label::EvaluationSteps => "Разбор",
+            Label::StepProtected => "защищённые пути",
+            Label::StepDeny => "правила deny",
+            Label::StepAllow => "правила allow",
+            Label::StepGrant => "временные одобрения",
+            Label::NoMatch => "нет совпадений",
+            Label::Outcome => "Итог",
+            Label::ExpansionPossible => "можно запросить расширение области",
+            Label::ExpansionImpossible => "это нельзя открыть одобрением",
+            Label::CurrentScope => "Разрешённая область",
+            Label::Nothing => "нет",
+            Label::Warnings => "Предупреждения",
+            Label::Approved => "Утверждено",
+            Label::UnapprovedEdits => "в файле политики есть неутверждённые правки",
+        }
+        .to_owned(),
         Msg::WorkspaceAlreadyRegistered { root } => {
             format!("{root} уже является рабочим пространством SafeScope.")
         }

@@ -8,7 +8,7 @@
 //! translation is not merely present but non-empty, and that the languages
 //! actually differ.
 
-use safescope::dataformatting::{Language, Msg};
+use safescope::dataformatting::{Label, Language, Msg};
 
 #[test]
 fn every_language_renders_every_message() {
@@ -66,6 +66,7 @@ fn every_language_renders_every_message() {
             found: 9,
             supported: 1,
         },
+        Msg::Label(Label::Allowed),
         Msg::WorkspaceAlreadyRegistered { root: "/p".into() },
         Msg::WorkspaceNotRegistered { root: "/p".into() },
         Msg::WorkspaceIdCorrupted {
@@ -180,7 +181,7 @@ fn every_language_renders_every_message() {
     // omission.
     assert_eq!(
         samples.len(),
-        61,
+        62,
         "add the new Msg variant to this list, then update the count"
     );
 
@@ -206,4 +207,43 @@ fn translations_differ_between_languages() {
         message.render(Language::Chinese),
         message.render(Language::Japanese)
     );
+}
+
+#[test]
+fn every_label_renders_in_every_language() {
+    // Labels are a nested enum, so the sample list above covers only one of
+    // them; each language matches exhaustively, and this checks the results are
+    // non-empty.
+    let labels = [
+        Label::Allowed,
+        Label::Refused,
+        Label::NotCovered,
+        Label::Path,
+        Label::Operation,
+        Label::Policy,
+        Label::PolicyVersion,
+        Label::EvaluationSteps,
+        Label::StepProtected,
+        Label::StepDeny,
+        Label::StepAllow,
+        Label::StepGrant,
+        Label::NoMatch,
+        Label::Outcome,
+        Label::ExpansionPossible,
+        Label::ExpansionImpossible,
+        Label::CurrentScope,
+        Label::Nothing,
+        Label::Warnings,
+        Label::Approved,
+        Label::UnapprovedEdits,
+    ];
+    for label in labels {
+        for language in Language::ALL {
+            let text = Msg::Label(label).render(language);
+            assert!(
+                !text.trim().is_empty(),
+                "{label:?} has no {language} translation"
+            );
+        }
+    }
 }

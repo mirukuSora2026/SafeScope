@@ -1,6 +1,6 @@
 //! Japanese messages.
 
-use crate::dataformatting::Msg;
+use crate::dataformatting::{Label, Msg};
 
 pub(super) fn render(msg: &Msg) -> String {
     match msg {
@@ -61,6 +61,30 @@ pub(super) fn render(msg: &Msg) -> String {
             "サポートされていないポリシーの schema_version {found} です。\
              このビルドが理解するのは {supported} です。"
         ),
+        Msg::Label(label) => match label {
+            Label::Allowed => "許可",
+            Label::Refused => "拒否",
+            Label::NotCovered => "該当なし",
+            Label::Path => "パス",
+            Label::Operation => "操作",
+            Label::Policy => "ポリシー",
+            Label::PolicyVersion => "バージョン",
+            Label::EvaluationSteps => "評価",
+            Label::StepProtected => "保護パス",
+            Label::StepDeny => "deny ルール",
+            Label::StepAllow => "allow ルール",
+            Label::StepGrant => "一時承認",
+            Label::NoMatch => "一致なし",
+            Label::Outcome => "結果",
+            Label::ExpansionPossible => "範囲の拡張を要求できます",
+            Label::ExpansionImpossible => "承認では解除できません",
+            Label::CurrentScope => "許可範囲",
+            Label::Nothing => "なし",
+            Label::Warnings => "警告",
+            Label::Approved => "承認済み",
+            Label::UnapprovedEdits => "ポリシーファイルに未承認の変更があります",
+        }
+        .to_owned(),
         Msg::WorkspaceAlreadyRegistered { root } => {
             format!("{root} はすでに SafeScope のワークスペースです。")
         }

@@ -1,13 +1,9 @@
-//! The `safescope` executable. The command line itself arrives in M1.
+//! The `safescope` executable.
 
-use safescope::dataformatting::Msg;
+use clap::Parser as _;
+
+use safescope::cli::{Cli, run};
 
 fn main() {
-    eprintln!(
-        "{}",
-        Msg::CliNotImplemented {
-            version: env!("CARGO_PKG_VERSION").to_owned()
-        }
-    );
-    std::process::exit(2);
+    std::process::exit(run(Cli::parse()));
 }

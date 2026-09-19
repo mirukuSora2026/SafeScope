@@ -1,6 +1,6 @@
 //! English messages.
 
-use crate::dataformatting::Msg;
+use crate::dataformatting::{Label, Msg};
 
 pub(super) fn render(msg: &Msg) -> String {
     match msg {
@@ -57,6 +57,30 @@ pub(super) fn render(msg: &Msg) -> String {
         Msg::PolicySchemaUnsupported { found, supported } => format!(
             "Unsupported policy schema_version {found}; this build understands {supported}."
         ),
+        Msg::Label(label) => match label {
+            Label::Allowed => "Allowed",
+            Label::Refused => "Refused",
+            Label::NotCovered => "Not covered",
+            Label::Path => "Path",
+            Label::Operation => "Operation",
+            Label::Policy => "Policy",
+            Label::PolicyVersion => "Version",
+            Label::EvaluationSteps => "Evaluation",
+            Label::StepProtected => "protected paths",
+            Label::StepDeny => "deny rules",
+            Label::StepAllow => "allow rules",
+            Label::StepGrant => "temporary approvals",
+            Label::NoMatch => "no match",
+            Label::Outcome => "Outcome",
+            Label::ExpansionPossible => "a scope expansion may be requested",
+            Label::ExpansionImpossible => "this cannot be opened by an approval",
+            Label::CurrentScope => "Allowed scope",
+            Label::Nothing => "nothing",
+            Label::Warnings => "Warnings",
+            Label::Approved => "Approved",
+            Label::UnapprovedEdits => "the policy file has unapproved edits",
+        }
+        .to_owned(),
         Msg::WorkspaceAlreadyRegistered { root } => {
             format!("{root} is already a SafeScope workspace.")
         }

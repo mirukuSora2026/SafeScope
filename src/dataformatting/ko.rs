@@ -1,6 +1,6 @@
 //! Korean messages.
 
-use crate::dataformatting::Msg;
+use crate::dataformatting::{Label, Msg};
 
 pub(super) fn render(msg: &Msg) -> String {
     match msg {
@@ -57,6 +57,30 @@ pub(super) fn render(msg: &Msg) -> String {
             "지원하지 않는 정책 schema_version {found} 입니다. 이 빌드는 {supported} 을 \
              이해합니다."
         ),
+        Msg::Label(label) => match label {
+            Label::Allowed => "허용",
+            Label::Refused => "거부",
+            Label::NotCovered => "해당 없음",
+            Label::Path => "경로",
+            Label::Operation => "연산",
+            Label::Policy => "정책",
+            Label::PolicyVersion => "버전",
+            Label::EvaluationSteps => "평가 과정",
+            Label::StepProtected => "보호 경로",
+            Label::StepDeny => "deny 규칙",
+            Label::StepAllow => "allow 규칙",
+            Label::StepGrant => "임시 승인",
+            Label::NoMatch => "해당 없음",
+            Label::Outcome => "결과",
+            Label::ExpansionPossible => "범위 확장을 요청할 수 있습니다",
+            Label::ExpansionImpossible => "승인으로 열 수 없습니다",
+            Label::CurrentScope => "허용 범위",
+            Label::Nothing => "없음",
+            Label::Warnings => "경고",
+            Label::Approved => "승인됨",
+            Label::UnapprovedEdits => "정책 파일에 승인되지 않은 변경이 있습니다",
+        }
+        .to_owned(),
         Msg::WorkspaceAlreadyRegistered { root } => {
             format!("{root} 은 이미 SafeScope 작업 공간입니다.")
         }
