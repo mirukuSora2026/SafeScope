@@ -61,6 +61,46 @@ pub(super) fn render(msg: &Msg) -> String {
             "サポートされていないポリシーの schema_version {found} です。\
              このビルドが理解するのは {supported} です。"
         ),
+        Msg::PolicyNoAllowRules => "ポリシーに allow ルールがないため、何も変更できません。\
+意図的であれば、空のリストのままにせず明示してください。"
+            .to_owned(),
+        Msg::PolicyEmptyDefaultOps => "default_ops が空のため、簡易形式の allow ルールが\
+どの操作も許可しなくなります。"
+            .to_owned(),
+        Msg::PolicyRuleGrantsNothing { pattern } => {
+            format!("ルール {pattern:?} はどの操作も許可していません。")
+        }
+        Msg::PolicyAllowOverProtected { pattern, protected } => format!(
+            "allow ルール {pattern:?} はエンジンが常に保護する {protected:?} に届きます。\
+             このルールは効果を持ちません。"
+        ),
+        Msg::PolicyWorkspaceWideNeedsOptIn { pattern } => format!(
+            "allow ルール {pattern:?} はワークスペース全体を覆います。意図的であれば \
+             safety.unsafe_allow_workspace_wide = true を設定してください。"
+        ),
+        Msg::PolicyAllowAlsoDenied { pattern } => format!(
+            "{pattern:?} が allow と deny の両方にあります。deny が常に優先するため、\
+             意図が不明です。"
+        ),
+        Msg::PolicyDuplicatePattern { pattern } => {
+            format!("パターン {pattern:?} が複数回書かれています。")
+        }
+        Msg::PolicyDenyNeverApplies { pattern } => format!(
+            "deny ルール {pattern:?} はどの allow ルールとも重ならないため、効果がありません。"
+        ),
+        Msg::PolicyBudgetZero { field } => {
+            format!("budget.{field} が 0 のため、すべての操作が拒否されます。")
+        }
+        Msg::PolicyFileLimitExceedsSnapshotLimit {
+            file_bytes,
+            snapshot_bytes,
+        } => format!(
+            "max_file_bytes（{file_bytes}）が max_snapshot_bytes（{snapshot_bytes}）を\
+             超えており、許可されたファイルの復旧データを保存できません。"
+        ),
+        Msg::PolicyWarnRatioOutOfRange { value } => {
+            format!("budget.warn_at_ratio が {value} です。0 と 1 の間である必要があります。")
+        }
         Msg::ProtectedEngineState => "エンジン自身のポリシーとワークスペース状態です。\
 変更できると、エンジンが自らの判断根拠を書き換えられてしまいます。"
             .to_owned(),

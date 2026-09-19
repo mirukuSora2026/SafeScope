@@ -57,6 +57,46 @@ pub(super) fn render(msg: &Msg) -> String {
             "지원하지 않는 정책 schema_version {found} 입니다. 이 빌드는 {supported} 을 \
              이해합니다."
         ),
+        Msg::PolicyNoAllowRules => "정책에 allow 규칙이 없어서 아무것도 바꿀 수 없습니다. \
+의도한 것이라면 빈 목록으로 두지 말고 명시하세요."
+            .to_owned(),
+        Msg::PolicyEmptyDefaultOps => "default_ops 가 비어 있어서 간단형 allow 규칙이 \
+아무 연산도 허용하지 않게 됩니다."
+            .to_owned(),
+        Msg::PolicyRuleGrantsNothing { pattern } => {
+            format!("{pattern:?} 규칙이 아무 연산도 허용하지 않습니다.")
+        }
+        Msg::PolicyAllowOverProtected { pattern, protected } => format!(
+            "allow 규칙 {pattern:?} 이 엔진이 항상 보호하는 {protected:?} 에 닿습니다. \
+             이 규칙은 효과가 없습니다."
+        ),
+        Msg::PolicyWorkspaceWideNeedsOptIn { pattern } => format!(
+            "allow 규칙 {pattern:?} 이 작업 공간 전체를 덮습니다. 의도한 것이라면 \
+             safety.unsafe_allow_workspace_wide = true 를 설정하세요."
+        ),
+        Msg::PolicyAllowAlsoDenied { pattern } => format!(
+            "{pattern:?} 이 allow 와 deny 양쪽에 있습니다. deny 가 항상 이기므로 의도가 \
+             불분명합니다."
+        ),
+        Msg::PolicyDuplicatePattern { pattern } => {
+            format!("패턴 {pattern:?} 이 여러 번 나옵니다.")
+        }
+        Msg::PolicyDenyNeverApplies { pattern } => {
+            format!("deny 규칙 {pattern:?} 이 어떤 allow 규칙과도 겹치지 않아 효과가 없습니다.")
+        }
+        Msg::PolicyBudgetZero { field } => {
+            format!("budget.{field} 이 0 이라서 모든 연산이 거부됩니다.")
+        }
+        Msg::PolicyFileLimitExceedsSnapshotLimit {
+            file_bytes,
+            snapshot_bytes,
+        } => format!(
+            "max_file_bytes ({file_bytes}) 이 max_snapshot_bytes ({snapshot_bytes}) 보다 \
+             큽니다. 허용된 파일의 복구 자료를 저장할 수 없게 됩니다."
+        ),
+        Msg::PolicyWarnRatioOutOfRange { value } => {
+            format!("budget.warn_at_ratio 가 {value} 입니다. 0 과 1 사이여야 합니다.")
+        }
         Msg::ProtectedEngineState => "엔진 자신의 정책과 작업 공간 상태입니다. \
 이걸 바꿀 수 있으면 엔진이 자기 판단 근거를 고쳐 쓸 수 있습니다."
             .to_owned(),

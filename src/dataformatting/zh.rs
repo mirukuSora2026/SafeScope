@@ -51,6 +51,44 @@ pub(super) fn render(msg: &Msg) -> String {
         Msg::PolicySchemaUnsupported { found, supported } => {
             format!("不支持的策略 schema_version {found}；此版本支持 {supported}。")
         }
+        Msg::PolicyNoAllowRules => "策略中没有 allow 规则，因此什么都无法更改。\
+如果这是有意的，请明确说明，而不是留空列表。"
+            .to_owned(),
+        Msg::PolicyEmptyDefaultOps => {
+            "default_ops 为空，简写形式的 allow 规则将不授予任何操作。".to_owned()
+        }
+        Msg::PolicyRuleGrantsNothing { pattern } => {
+            format!("规则 {pattern:?} 不授予任何操作。")
+        }
+        Msg::PolicyAllowOverProtected { pattern, protected } => {
+            format!("allow 规则 {pattern:?} 触及引擎始终保护的 {protected:?}，该规则永远不会生效。")
+        }
+        Msg::PolicyWorkspaceWideNeedsOptIn { pattern } => format!(
+            "allow 规则 {pattern:?} 覆盖整个工作区。如果确属有意，请设置 \
+             safety.unsafe_allow_workspace_wide = true。"
+        ),
+        Msg::PolicyAllowAlsoDenied { pattern } => {
+            format!("{pattern:?} 同时出现在 allow 和 deny 中。deny 始终优先，意图不明确。")
+        }
+        Msg::PolicyDuplicatePattern { pattern } => {
+            format!("模式 {pattern:?} 出现了多次。")
+        }
+        Msg::PolicyDenyNeverApplies { pattern } => {
+            format!("deny 规则 {pattern:?} 与任何 allow 规则都不重叠，因此没有效果。")
+        }
+        Msg::PolicyBudgetZero { field } => {
+            format!("budget.{field} 为 0，将拒绝所有操作。")
+        }
+        Msg::PolicyFileLimitExceedsSnapshotLimit {
+            file_bytes,
+            snapshot_bytes,
+        } => format!(
+            "max_file_bytes（{file_bytes}）超过 max_snapshot_bytes（{snapshot_bytes}），\
+             允许的文件将无法保存恢复数据。"
+        ),
+        Msg::PolicyWarnRatioOutOfRange { value } => {
+            format!("budget.warn_at_ratio 为 {value}，必须介于 0 和 1 之间。")
+        }
         Msg::ProtectedEngineState => "引擎自身的策略与工作区状态。\
 若可修改，引擎便能改写自己的判断依据。"
             .to_owned(),

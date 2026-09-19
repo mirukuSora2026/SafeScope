@@ -57,6 +57,46 @@ pub(super) fn render(msg: &Msg) -> String {
         Msg::PolicySchemaUnsupported { found, supported } => format!(
             "Unsupported policy schema_version {found}; this build understands {supported}."
         ),
+        Msg::PolicyNoAllowRules => "The policy has no allow rules, so nothing could ever \
+be changed. If that is intended, say so explicitly rather than leaving the list empty."
+            .to_owned(),
+        Msg::PolicyEmptyDefaultOps => "default_ops is empty, so shorthand allow rules would \
+grant no operations."
+            .to_owned(),
+        Msg::PolicyRuleGrantsNothing { pattern } => {
+            format!("The rule for {pattern:?} grants no operations.")
+        }
+        Msg::PolicyAllowOverProtected { pattern, protected } => format!(
+            "The allow rule {pattern:?} reaches {protected:?}, which the engine always \
+             protects, so the rule can never take effect."
+        ),
+        Msg::PolicyWorkspaceWideNeedsOptIn { pattern } => format!(
+            "The allow rule {pattern:?} covers the whole workspace. Set \
+             safety.unsafe_allow_workspace_wide = true if that is intended."
+        ),
+        Msg::PolicyAllowAlsoDenied { pattern } => format!(
+            "{pattern:?} appears in both allow and deny. Deny always wins, so the intent \
+             is unclear."
+        ),
+        Msg::PolicyDuplicatePattern { pattern } => {
+            format!("The pattern {pattern:?} is listed more than once.")
+        }
+        Msg::PolicyDenyNeverApplies { pattern } => format!(
+            "The deny rule {pattern:?} does not overlap any allow rule, so it has no effect."
+        ),
+        Msg::PolicyBudgetZero { field } => {
+            format!("budget.{field} is zero, which would refuse every operation.")
+        }
+        Msg::PolicyFileLimitExceedsSnapshotLimit {
+            file_bytes,
+            snapshot_bytes,
+        } => format!(
+            "max_file_bytes ({file_bytes}) exceeds max_snapshot_bytes ({snapshot_bytes}), so a \
+             permitted file could never be snapshotted."
+        ),
+        Msg::PolicyWarnRatioOutOfRange { value } => {
+            format!("budget.warn_at_ratio is {value}; it must be between 0 and 1.")
+        }
         Msg::ProtectedEngineState => "The engine's own policy and workspace state. \
 Changing it would let the engine rewrite what it checks against."
             .to_owned(),

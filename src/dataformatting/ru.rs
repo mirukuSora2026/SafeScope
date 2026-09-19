@@ -57,6 +57,46 @@ pub(super) fn render(msg: &Msg) -> String {
         Msg::PolicySchemaUnsupported { found, supported } => format!(
             "Неподдерживаемая версия схемы политики {found}; эта сборка понимает {supported}."
         ),
+        Msg::PolicyNoAllowRules => "В политике нет правил allow, поэтому ничего нельзя \
+изменить. Если это намеренно, укажите это явно, а не оставляйте список пустым."
+            .to_owned(),
+        Msg::PolicyEmptyDefaultOps => "default_ops пуст, поэтому краткие правила allow не \
+дадут ни одной операции."
+            .to_owned(),
+        Msg::PolicyRuleGrantsNothing { pattern } => {
+            format!("Правило {pattern:?} не разрешает ни одной операции.")
+        }
+        Msg::PolicyAllowOverProtected { pattern, protected } => format!(
+            "Правило allow {pattern:?} затрагивает {protected:?}, который движок защищает \
+             всегда, поэтому правило никогда не сработает."
+        ),
+        Msg::PolicyWorkspaceWideNeedsOptIn { pattern } => format!(
+            "Правило allow {pattern:?} охватывает всё рабочее пространство. Если это \
+             намеренно, установите safety.unsafe_allow_workspace_wide = true."
+        ),
+        Msg::PolicyAllowAlsoDenied { pattern } => format!(
+            "{pattern:?} присутствует и в allow, и в deny. Deny всегда побеждает, поэтому \
+             намерение неясно."
+        ),
+        Msg::PolicyDuplicatePattern { pattern } => {
+            format!("Шаблон {pattern:?} указан несколько раз.")
+        }
+        Msg::PolicyDenyNeverApplies { pattern } => format!(
+            "Правило deny {pattern:?} не пересекается ни с одним allow, поэтому не действует."
+        ),
+        Msg::PolicyBudgetZero { field } => {
+            format!("budget.{field} равен нулю, что отклонит любую операцию.")
+        }
+        Msg::PolicyFileLimitExceedsSnapshotLimit {
+            file_bytes,
+            snapshot_bytes,
+        } => format!(
+            "max_file_bytes ({file_bytes}) превышает max_snapshot_bytes ({snapshot_bytes}), \
+             поэтому для разрешённого файла нельзя сохранить данные восстановления."
+        ),
+        Msg::PolicyWarnRatioOutOfRange { value } => {
+            format!("budget.warn_at_ratio равен {value}; он должен быть между 0 и 1.")
+        }
         Msg::ProtectedEngineState => "Собственная политика движка и состояние рабочего \
 пространства. Возможность их изменить позволила бы движку переписать то, по чему он проверяет."
             .to_owned(),
