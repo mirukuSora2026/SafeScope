@@ -1,0 +1,13 @@
+/target
+
+# Local workspace identity — generated per checkout, never shared.
+.safescope/workspace-id
+
+# Editor and local tooling state.
+.idea/
+.claude-flow/
+.DS_Store
+
+# ruflo local tool state.
+.claude/proven-config.json
+.claude/.proven-config-version
