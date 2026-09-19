@@ -81,12 +81,54 @@ impl std::fmt::Display for Stage {
     }
 }
 
+/// What an operation is for.
+///
+/// Undo is recorded like any other operation, but it does not spend the change
+/// budget. A budget exists to stop a small edit sprawling into a refactor;
+/// refusing to undo because the sprawl already happened would leave a person
+/// stuck with exactly the mess the limit was meant to prevent.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum OperationKind {
+    /// A change the caller asked for. Spends budget.
+    Change,
+    /// Reversing an earlier operation. Has its own resource checks.
+    Undo,
+}
+
+impl OperationKind {
+    pub const fn as_str(self) -> &'static str {
+        match self {
+            OperationKind::Change => "change",
+            OperationKind::Undo => "undo",
+        }
+    }
+
+    pub fn parse(text: &str) -> Option<Self> {
+        [OperationKind::Change, OperationKind::Undo]
+            .into_iter()
+            .find(|kind| kind.as_str() == text)
+    }
+
+    /// Whether this operation counts against the change budget.
+    pub const fn spends_budget(self) -> bool {
+        matches!(self, OperationKind::Change)
+    }
+}
+
+impl std::fmt::Display for OperationKind {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(self.as_str())
+    }
+}
+
 /// One operation, as the journal holds it.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct OperationRecord {
     pub id: OperationId,
     pub task: TaskId,
     pub plan: PlanId,
+    pub kind: OperationKind,
     /// The caller's idempotency key, when one was given.
     pub request: Option<RequestId>,
     /// Hash of the request that produced this operation, so a resend can be
@@ -122,6 +164,22 @@ impl OperationRecord {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn undo_does_not_spend_the_change_budget() {
+        // Refusing to undo because the budget is spent would leave a person
+        // stuck with exactly the sprawl the limit was meant to prevent.
+        assert!(OperationKind::Change.spends_budget());
+        assert!(!OperationKind::Undo.spends_budget());
+    }
+
+    #[test]
+    fn kind_names_round_trip() {
+        for kind in [OperationKind::Change, OperationKind::Undo] {
+            assert_eq!(OperationKind::parse(kind.as_str()), Some(kind));
+        }
+        assert_eq!(OperationKind::parse("rollback"), None);
+    }
 
     #[test]
     fn stage_names_round_trip() {

@@ -30,7 +30,7 @@ use crate::error::{Error, Result};
 use crate::fault::{self, FaultPoint};
 use crate::hash::ContentHash;
 use crate::ids::RequestId;
-use crate::journal::{Journal, OperationRecord, Stage};
+use crate::journal::{Journal, OperationKind, OperationRecord, Stage};
 use crate::path_guard::Workspace;
 use crate::paths::RelPath;
 use crate::planner::ChangePlan;
@@ -61,6 +61,20 @@ impl Executor<'_> {
         plan: &ChangePlan,
         request: Option<RequestKey>,
     ) -> Result<OperationRecord> {
+        self.apply_as(plan, OperationKind::Change, request)
+    }
+
+    /// Applies a plan, recording what it is for.
+    ///
+    /// Undo goes through the same steps — it is a file change like any other and
+    /// deserves the same record — but is marked so it does not spend the change
+    /// budget.
+    pub fn apply_as(
+        &mut self,
+        plan: &ChangePlan,
+        kind: OperationKind,
+        request: Option<RequestKey>,
+    ) -> Result<OperationRecord> {
         if plan.has_expired(SystemTime::now()) {
             return Err(Error::Denied(plan.expiry_denial()));
         }
@@ -81,6 +95,7 @@ impl Executor<'_> {
         let record = self.journal.record_prepared(
             plan.task,
             plan.id,
+            kind,
             request.map(|key| key.id),
             request.map(|key| key.digest),
             &plan.transition,

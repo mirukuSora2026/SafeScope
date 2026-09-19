@@ -9,7 +9,7 @@ use safescope::domain::{FileState, PathState, Transition};
 use safescope::error::ErrorCode;
 use safescope::hash::ContentHash;
 use safescope::ids::{OperationId, PlanId, RequestId, TaskId};
-use safescope::journal::{Journal, Stage};
+use safescope::journal::{Journal, OperationKind, Stage};
 use safescope::paths::RelPath;
 use tempfile::TempDir;
 
@@ -42,6 +42,7 @@ fn a_prepared_operation_is_readable_immediately() {
         .record_prepared(
             task,
             PlanId::new(),
+            OperationKind::Change,
             None,
             None,
             &replace_transition(),
@@ -64,7 +65,15 @@ fn the_journal_survives_being_reopened() {
     let id = {
         let mut journal = Journal::open_at(&database).expect("open");
         journal
-            .record_prepared(task, PlanId::new(), None, None, &replace_transition(), None)
+            .record_prepared(
+                task,
+                PlanId::new(),
+                OperationKind::Change,
+                None,
+                None,
+                &replace_transition(),
+                None,
+            )
             .expect("record")
             .id
     };
@@ -83,7 +92,15 @@ fn sequence_numbers_increase_and_do_not_repeat() {
     let mut seen = Vec::new();
     for _ in 0..5 {
         let record = journal
-            .record_prepared(task, PlanId::new(), None, None, &replace_transition(), None)
+            .record_prepared(
+                task,
+                PlanId::new(),
+                OperationKind::Change,
+                None,
+                None,
+                &replace_transition(),
+                None,
+            )
             .expect("record");
         seen.push(record.sequence);
     }
@@ -96,7 +113,15 @@ fn an_operation_moves_through_its_stages() {
     let (_dir, mut journal) = journal();
     let task = TaskId::new();
     let record = journal
-        .record_prepared(task, PlanId::new(), None, None, &replace_transition(), None)
+        .record_prepared(
+            task,
+            PlanId::new(),
+            OperationKind::Change,
+            None,
+            None,
+            &replace_transition(),
+            None,
+        )
         .expect("record");
 
     journal
@@ -129,14 +154,30 @@ fn an_unsettled_operation_is_what_recovery_starts_from() {
     let task = TaskId::new();
 
     let crashed = journal
-        .record_prepared(task, PlanId::new(), None, None, &replace_transition(), None)
+        .record_prepared(
+            task,
+            PlanId::new(),
+            OperationKind::Change,
+            None,
+            None,
+            &replace_transition(),
+            None,
+        )
         .expect("record");
     journal
         .mark(crashed.id, Stage::Applying, None, None)
         .expect("applying");
 
     let finished = journal
-        .record_prepared(task, PlanId::new(), None, None, &replace_transition(), None)
+        .record_prepared(
+            task,
+            PlanId::new(),
+            OperationKind::Change,
+            None,
+            None,
+            &replace_transition(),
+            None,
+        )
         .expect("record");
     journal
         .mark(finished.id, Stage::Committed, None, None)
@@ -163,6 +204,7 @@ fn a_resent_request_returns_the_original_operation() {
         .record_prepared(
             task,
             PlanId::new(),
+            OperationKind::Change,
             Some(request),
             Some(digest),
             &replace_transition(),
@@ -185,6 +227,7 @@ fn the_same_key_with_different_contents_is_refused() {
         .record_prepared(
             task,
             PlanId::new(),
+            OperationKind::Change,
             Some(request),
             Some(hash("first request")),
             &replace_transition(),
@@ -217,6 +260,7 @@ fn a_request_key_belongs_to_one_task() {
         .record_prepared(
             TaskId::new(),
             PlanId::new(),
+            OperationKind::Change,
             Some(request),
             Some(digest),
             &replace_transition(),
@@ -238,13 +282,22 @@ fn history_is_ordered_and_scoped_to_one_task() {
 
     for _ in 0..3 {
         journal
-            .record_prepared(mine, PlanId::new(), None, None, &replace_transition(), None)
+            .record_prepared(
+                mine,
+                PlanId::new(),
+                OperationKind::Change,
+                None,
+                None,
+                &replace_transition(),
+                None,
+            )
             .expect("record");
     }
     journal
         .record_prepared(
             theirs,
             PlanId::new(),
+            OperationKind::Change,
             None,
             None,
             &replace_transition(),
@@ -269,21 +322,45 @@ fn undo_offers_the_most_recent_committed_operation() {
     let task = TaskId::new();
 
     let first = journal
-        .record_prepared(task, PlanId::new(), None, None, &replace_transition(), None)
+        .record_prepared(
+            task,
+            PlanId::new(),
+            OperationKind::Change,
+            None,
+            None,
+            &replace_transition(),
+            None,
+        )
         .expect("record");
     journal
         .mark(first.id, Stage::Committed, None, None)
         .expect("committed");
 
     let second = journal
-        .record_prepared(task, PlanId::new(), None, None, &replace_transition(), None)
+        .record_prepared(
+            task,
+            PlanId::new(),
+            OperationKind::Change,
+            None,
+            None,
+            &replace_transition(),
+            None,
+        )
         .expect("record");
     journal
         .mark(second.id, Stage::Committed, None, None)
         .expect("committed");
 
     let pending = journal
-        .record_prepared(task, PlanId::new(), None, None, &replace_transition(), None)
+        .record_prepared(
+            task,
+            PlanId::new(),
+            OperationKind::Change,
+            None,
+            None,
+            &replace_transition(),
+            None,
+        )
         .expect("record");
     journal
         .mark(pending.id, Stage::Applying, None, None)
@@ -303,7 +380,15 @@ fn nothing_is_undoable_before_anything_commits() {
     let task = TaskId::new();
 
     let record = journal
-        .record_prepared(task, PlanId::new(), None, None, &replace_transition(), None)
+        .record_prepared(
+            task,
+            PlanId::new(),
+            OperationKind::Change,
+            None,
+            None,
+            &replace_transition(),
+            None,
+        )
         .expect("record");
     journal
         .mark(record.id, Stage::Aborted, None, None)
@@ -326,7 +411,15 @@ fn every_transition_shape_round_trips() {
 
     for transition in &transitions {
         let record = journal
-            .record_prepared(task, PlanId::new(), None, None, transition, None)
+            .record_prepared(
+                task,
+                PlanId::new(),
+                OperationKind::Change,
+                None,
+                None,
+                transition,
+                None,
+            )
             .expect("record");
         assert_eq!(&journal.get(record.id).expect("get").transition, transition);
     }
@@ -340,6 +433,7 @@ fn an_observed_absence_round_trips() {
         .record_prepared(
             task,
             PlanId::new(),
+            OperationKind::Change,
             None,
             None,
             &Transition::trash(path("gone.rs"), hash("content"), 7),
