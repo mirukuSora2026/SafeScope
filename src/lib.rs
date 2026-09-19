@@ -27,6 +27,7 @@ pub mod error;
 pub mod fault;
 pub mod hash;
 pub mod ids;
+pub mod journal;
 pub mod path_guard;
 pub mod paths;
 pub mod platform;

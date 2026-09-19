@@ -80,6 +80,19 @@ fn every_language_renders_every_message() {
         Msg::HintFillInAllowThenApprove {
             policy: ".safescope/policy.toml".into(),
         },
+        Msg::JournalOpenFailed {
+            path: "/s/j".into(),
+            reason: "locked".into(),
+        },
+        Msg::JournalOperationFailed {
+            reason: "disk full".into(),
+        },
+        Msg::JournalRequestMismatch {
+            request: "req_1".into(),
+        },
+        Msg::JournalUnknownOperation {
+            operation: "op_1".into(),
+        },
         Msg::SnapshotVerificationFailed { hash: "abc".into() },
         Msg::SnapshotMissing { hash: "abc".into() },
         Msg::SnapshotStoreFailed {
@@ -200,7 +213,7 @@ fn every_language_renders_every_message() {
     // omission.
     assert_eq!(
         samples.len(),
-        69,
+        73,
         "add the new Msg variant to this list, then update the count"
     );
 

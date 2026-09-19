@@ -98,6 +98,19 @@ pub(super) fn render(msg: &Msg) -> String {
             "아직 아무것도 바꿀 수 없습니다. 허용할 경로를 {policy} 에 적은 뒤 \
              `safescope policy approve` 를 실행하세요."
         ),
+        Msg::JournalOpenFailed { path, reason } => {
+            format!("{path} 의 작업 기록을 열지 못했습니다: {reason}")
+        }
+        Msg::JournalOperationFailed { reason } => {
+            format!("작업 기록을 쓰지 못했습니다: {reason}")
+        }
+        Msg::JournalRequestMismatch { request } => format!(
+            "요청 {request} 이 다른 내용으로 이미 기록돼 있습니다. 어느 쪽을 뜻했는지 \
+             추측하면 같은 변경을 두 번 적용할 수 있어서, 새 요청으로 보지 않고 보고합니다."
+        ),
+        Msg::JournalUnknownOperation { operation } => {
+            format!("연산 {operation} 에 대한 작업 기록이 없습니다.")
+        }
         Msg::SnapshotVerificationFailed { hash } => format!(
             "{hash} 의 복구 자료를 다시 해시한 값이 저장한 값과 다릅니다. 아무것도 바꾸지 \
              않았습니다. 다시 읽어서 맞는 복구 자료가 없으면 변경을 되돌릴 수 없습니다."

@@ -93,6 +93,19 @@ pub(super) fn render(msg: &Msg) -> String {
                 "目前还不能更改任何内容。请在 {policy} 中填写要允许的路径，然后运行 `safescope policy approve`。"
             )
         }
+        Msg::JournalOpenFailed { path, reason } => {
+            format!("无法打开位于 {path} 的作业记录：{reason}")
+        }
+        Msg::JournalOperationFailed { reason } => {
+            format!("无法写入作业记录：{reason}")
+        }
+        Msg::JournalRequestMismatch { request } => format!(
+            "请求 {request} 已以不同内容记录在案。猜测其本意可能导致同一更改被应用两次，\
+             因此予以报告，而不是当作新请求。"
+        ),
+        Msg::JournalUnknownOperation { operation } => {
+            format!("没有关于操作 {operation} 的作业记录。")
+        }
         Msg::SnapshotVerificationFailed { hash } => format!(
             "{hash} 的恢复数据重新计算的哈希与所存的不一致。未做任何更改：\
              没有能正确读回的快照，这次更改将无法撤销。"

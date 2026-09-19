@@ -85,6 +85,8 @@ src/
 │  ├─ protected.rs     paths no rule can unlock
 │  ├─ grant.rs         temporary approvals
 │  └─ evaluate.rs      protected → deny → allow → grant → not covered
+├─ journal.rs          the record of what was done and attempted (I1)
+│  └─ record.rs        Stage, OperationRecord
 ├─ path_guard.rs       Workspace, Resolved — filesystem resolution (I4)
 ├─ platform.rs         atomic rename, staged writes, durable removal
 ├─ registry.rs         .safescope/ bootstrap and workspace identity
@@ -97,8 +99,8 @@ src/
    └─ hook.rs           the PreToolUse hook
 ```
 
-Modules still to come: `budget`, `planner`, `executor`, `journal`, `recovery`,
-and the `mcp` adapter.
+Modules still to come: `budget`, `planner`, `executor`, `recovery`, and the
+`mcp` adapter.
 
 ## Commands
 

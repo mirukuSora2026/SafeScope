@@ -98,6 +98,19 @@ pub(super) fn render(msg: &Msg) -> String {
             "Пока ничего нельзя изменить. Добавьте разрешаемые пути в {policy}, затем \
              выполните `safescope policy approve`."
         ),
+        Msg::JournalOpenFailed { path, reason } => {
+            format!("Не удалось открыть журнал в {path}: {reason}")
+        }
+        Msg::JournalOperationFailed { reason } => {
+            format!("Не удалось записать журнал: {reason}")
+        }
+        Msg::JournalRequestMismatch { request } => format!(
+            "Запрос {request} уже записан с другим содержимым. Он сообщается, а не считается \
+             новым: догадка о том, что имелось в виду, может применить изменение дважды."
+        ),
+        Msg::JournalUnknownOperation { operation } => {
+            format!("Для операции {operation} нет записи в журнале.")
+        }
         Msg::SnapshotVerificationFailed { hash } => format!(
             "Данные восстановления для {hash} не сходятся по хешу с тем, что было сохранено. \
              Ничего не изменено: без снимка, который читается обратно верно, изменение \

@@ -98,6 +98,20 @@ pub(super) fn render(msg: &Msg) -> String {
             "Nothing can be changed yet. Add the paths you want to allow to {policy}, then run \
              `safescope policy approve`."
         ),
+        Msg::JournalOpenFailed { path, reason } => {
+            format!("The journal at {path} could not be opened: {reason}")
+        }
+        Msg::JournalOperationFailed { reason } => {
+            format!("The journal could not be written: {reason}")
+        }
+        Msg::JournalRequestMismatch { request } => format!(
+            "Request {request} was already recorded with different contents. It is reported \
+             rather than treated as a new request, because guessing which one was meant could \
+             apply a change twice."
+        ),
+        Msg::JournalUnknownOperation { operation } => {
+            format!("There is no journal record for operation {operation}.")
+        }
         Msg::SnapshotVerificationFailed { hash } => format!(
             "The recovery data for {hash} does not hash back to what was stored. Nothing was \
              changed: without a snapshot that reads back correctly, the change could not be \

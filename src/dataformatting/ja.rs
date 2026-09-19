@@ -104,6 +104,20 @@ pub(super) fn render(msg: &Msg) -> String {
             "まだ何も変更できません。許可したいパスを {policy} に書いてから \
              `safescope policy approve` を実行してください。"
         ),
+        Msg::JournalOpenFailed { path, reason } => {
+            format!("{path} の作業記録を開けませんでした: {reason}")
+        }
+        Msg::JournalOperationFailed { reason } => {
+            format!("作業記録を書き込めませんでした: {reason}")
+        }
+        Msg::JournalRequestMismatch { request } => format!(
+            "リクエスト {request} は別の内容ですでに記録されています。どちらの意図かを\
+             推測すると同じ変更を二度適用しかねないため、新しいリクエストとは見なさず\
+             報告します。"
+        ),
+        Msg::JournalUnknownOperation { operation } => {
+            format!("操作 {operation} に対応する作業記録がありません。")
+        }
         Msg::SnapshotVerificationFailed { hash } => format!(
             "{hash} の復旧データを再ハッシュした値が保存した値と一致しません。\
              何も変更していません。正しく読み戻せる復旧データがなければ、\

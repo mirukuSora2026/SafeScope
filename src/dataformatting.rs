@@ -249,6 +249,21 @@ pub enum Msg {
         policy: String,
     },
 
+    // ── Journal ────────────────────────────────────────────────────────
+    JournalOpenFailed {
+        path: String,
+        reason: String,
+    },
+    JournalOperationFailed {
+        reason: String,
+    },
+    JournalRequestMismatch {
+        request: String,
+    },
+    JournalUnknownOperation {
+        operation: String,
+    },
+
     // ── Recovery data ──────────────────────────────────────────────────
     SnapshotVerificationFailed {
         hash: String,
