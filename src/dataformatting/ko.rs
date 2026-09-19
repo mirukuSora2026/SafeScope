@@ -93,6 +93,14 @@ pub(super) fn render(msg: &Msg) -> String {
         Msg::WorkspaceRegistered { root, id } => {
             format!("{root} 을 작업 공간 {id} 로 등록했습니다.")
         }
+        Msg::WorkspaceBusyElsewhere { path } => format!(
+            "다른 SafeScope 프로세스가 이 작업 공간에 쓰고 있습니다 (잠금은 {path}). \
+             예산 검사와 그에 이은 예약 사이에 다른 프로세스가 끼어들지 못하도록 \
+             한 번에 하나만 씁니다."
+        ),
+        Msg::HintAnotherSessionIsWriting => {
+            "다른 세션이 끝나기를 기다리거나 그 세션을 닫으세요.".to_owned()
+        }
         Msg::HintRunInitFirst => "프로젝트에서 `safescope init` 을 먼저 실행하세요.".to_owned(),
         Msg::HintFillInAllowThenApprove { policy } => format!(
             "아직 아무것도 바꿀 수 없습니다. 허용할 경로를 {policy} 에 적은 뒤 \

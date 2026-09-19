@@ -93,6 +93,14 @@ pub(super) fn render(msg: &Msg) -> String {
         Msg::WorkspaceRegistered { root, id } => {
             format!("{root} зарегистрирован как рабочее пространство {id}.")
         }
+        Msg::WorkspaceBusyElsewhere { path } => format!(
+            "В это рабочее пространство пишет другой процесс SafeScope (его блокировка — \
+             {path}). Писатель одновременно только один, чтобы между проверкой бюджета и \
+             следующим за ней резервированием не вклинился кто-то ещё."
+        ),
+        Msg::HintAnotherSessionIsWriting => {
+            "Дождитесь завершения другого сеанса или закройте его.".to_owned()
+        }
         Msg::HintRunInitFirst => "Сначала выполните `safescope init` в проекте.".to_owned(),
         Msg::HintFillInAllowThenApprove { policy } => format!(
             "Пока ничего нельзя изменить. Добавьте разрешаемые пути в {policy}, затем \

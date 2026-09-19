@@ -76,6 +76,10 @@ fn every_language_renders_every_message() {
             root: "/p".into(),
             id: "ws_1".into(),
         },
+        Msg::WorkspaceBusyElsewhere {
+            path: "/s/lock".into(),
+        },
+        Msg::HintAnotherSessionIsWriting,
         Msg::HintRunInitFirst,
         Msg::HintFillInAllowThenApprove {
             policy: ".safescope/policy.toml".into(),
@@ -253,7 +257,7 @@ fn every_language_renders_every_message() {
     // omission.
     assert_eq!(
         samples.len(),
-        87,
+        89,
         "add the new Msg variant to this list, then update the count"
     );
 

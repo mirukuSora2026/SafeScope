@@ -93,6 +93,14 @@ pub(super) fn render(msg: &Msg) -> String {
         Msg::WorkspaceRegistered { root, id } => {
             format!("Registered {root} as workspace {id}.")
         }
+        Msg::WorkspaceBusyElsewhere { path } => format!(
+            "Another SafeScope process is writing to this workspace (its lock is at {path}). \
+             Only one writer at a time, so a budget check and the reservation it leads to \
+             cannot be interleaved with somebody else's."
+        ),
+        Msg::HintAnotherSessionIsWriting => {
+            "Wait for the other session to finish, or close it.".to_owned()
+        }
         Msg::HintRunInitFirst => "Run `safescope init` in the project first.".to_owned(),
         Msg::HintFillInAllowThenApprove { policy } => format!(
             "Nothing can be changed yet. Add the paths you want to allow to {policy}, then run \

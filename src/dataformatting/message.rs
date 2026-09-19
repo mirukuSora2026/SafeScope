@@ -118,6 +118,10 @@ pub enum Msg {
         root: String,
         id: String,
     },
+    WorkspaceBusyElsewhere {
+        path: String,
+    },
+    HintAnotherSessionIsWriting,
     HintRunInitFirst,
     HintFillInAllowThenApprove {
         policy: String,

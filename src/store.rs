@@ -10,6 +10,7 @@
 //! and believe it.
 
 pub mod content;
+pub mod lock;
 pub mod policy_store;
 
 use std::fs;

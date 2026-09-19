@@ -258,6 +258,12 @@ impl std::error::Error for Denial {}
 pub struct Fault {
     code: ErrorCode,
     message: String,
+    /// What the caller can do next, as for a denial.
+    ///
+    /// "The other session will finish" is as actionable as "ask for a scope
+    /// expansion", and the shape of a report should not depend on which kind of
+    /// error happens to be carrying the advice.
+    hint: Option<String>,
     source: Option<Box<dyn std::error::Error + Send + Sync>>,
 }
 
@@ -270,8 +276,15 @@ impl Fault {
         Self {
             code,
             message: message.into(),
+            hint: None,
             source: None,
         }
+    }
+
+    #[must_use]
+    pub fn with_hint(mut self, hint: impl Into<String>) -> Self {
+        self.hint = Some(hint.into());
+        self
     }
 
     #[must_use]
@@ -290,6 +303,10 @@ impl Fault {
 
     pub fn message(&self) -> &str {
         &self.message
+    }
+
+    pub fn hint(&self) -> Option<&str> {
+        self.hint.as_deref()
     }
 }
 
@@ -340,7 +357,7 @@ impl Error {
                 denial.message().to_owned(),
                 denial.hint().map(str::to_owned),
             ),
-            Error::Faulted(fault) => (fault.message().to_owned(), None),
+            Error::Faulted(fault) => (fault.message().to_owned(), fault.hint().map(str::to_owned)),
         };
         ErrorReport {
             code: code.as_str(),

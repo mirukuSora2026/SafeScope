@@ -87,6 +87,11 @@ pub(super) fn render(msg: &Msg) -> String {
         Msg::WorkspaceRegistered { root, id } => {
             format!("已将 {root} 注册为工作区 {id}。")
         }
+        Msg::WorkspaceBusyElsewhere { path } => format!(
+            "另一个 SafeScope 进程正在写入此工作区（其锁位于 {path}）。\
+             同一时间只允许一个写入者，以免预算检查与随之而来的预留被他人插入其间。"
+        ),
+        Msg::HintAnotherSessionIsWriting => "请等待另一个会话结束，或将其关闭。".to_owned(),
         Msg::HintRunInitFirst => "请先在项目中运行 `safescope init`。".to_owned(),
         Msg::HintFillInAllowThenApprove { policy } => {
             format!(

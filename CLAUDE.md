@@ -37,8 +37,9 @@ the tests.
 - **A denial is not a fault.** Use `Denial` when a rule refused, `Fault` when the
   engine or environment failed. Collapsing the two leaves callers unable to tell
   whether a retry is worth anything, and an AI client will loop.
-- **Give denials a hint.** `Denial::with_hint` is what stops a client repeating a
-  request that can never succeed.
+- **Give errors a hint.** `with_hint` exists on both `Denial` and `Fault`; it is
+  what stops a client repeating a request that can never succeed, and what tells
+  a person what to do about one that might.
 - **Paths are rejected, not normalised.** `RelPath::parse` refuses `..` rather
   than resolving it. Never add a normalisation pass.
 - **`RelPath` is the only way a path enters the engine.** Do not add a function
@@ -102,6 +103,7 @@ src/
 ├─ registry.rs         .safescope/ bootstrap and workspace identity
 ├─ store.rs            state layout, atomic writes
 │  ├─ content.rs       content-addressed blobs: snapshots (I2) and payloads
+│  ├─ lock.rs          one writer at a time, per workspace
 │  └─ policy_store.rs  approved policy versions
 └─ cli.rs              init, policy approve/show, check, hook
    ├─ approve.rs
@@ -109,7 +111,8 @@ src/
    └─ hook.rs           the PreToolUse hook
 ```
 
-Modules still to come: the workspace lock and the `mcp` adapter.
+Modules still to come: the `mcp` adapter, and the CLI commands for plan, apply,
+undo, status and recover.
 
 ## Commands
 

@@ -97,6 +97,13 @@ pub(super) fn render(msg: &Msg) -> String {
         Msg::WorkspaceRegistered { root, id } => {
             format!("{root} をワークスペース {id} として登録しました。")
         }
+        Msg::WorkspaceBusyElsewhere { path } => format!(
+            "別の SafeScope プロセスがこのワークスペースに書き込んでいます（ロックは {path}）。\
+             予算の確認とそれに続く予約の間に他が割り込まないよう、書き込みは一度に一つです。"
+        ),
+        Msg::HintAnotherSessionIsWriting => {
+            "他のセッションが終わるのを待つか、閉じてください。".to_owned()
+        }
         Msg::HintRunInitFirst => {
             "先にプロジェクトで `safescope init` を実行してください。".to_owned()
         }
