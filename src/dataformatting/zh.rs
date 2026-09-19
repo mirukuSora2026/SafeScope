@@ -93,6 +93,17 @@ pub(super) fn render(msg: &Msg) -> String {
                 "目前还不能更改任何内容。请在 {policy} 中填写要允许的路径，然后运行 `safescope policy approve`。"
             )
         }
+        Msg::UndoNothingRecorded => "没有可撤销的内容：此任务没有已完成的操作。\
+结果尚不明确的操作必须先行确定。"
+            .to_owned(),
+        Msg::UndoConflictAt { path } => {
+            format!(
+                "{path} 在 SafeScope 最后一次改动之后发生了变化，撤销会覆盖其后写入的内容。未做任何更改。"
+            )
+        }
+        Msg::HintCompareBeforeUndoing { path } => {
+            format!("请将 {path} 与所存的原有内容比较后决定保留哪一份；恢复数据都会保留。")
+        }
         Msg::BudgetPathsExceeded {
             used,
             limit,

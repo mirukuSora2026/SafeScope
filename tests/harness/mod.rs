@@ -11,9 +11,12 @@ use safescope::journal::Journal;
 use safescope::path_guard::Workspace;
 use safescope::paths::RelPath;
 use safescope::planner::{ChangePlan, ChangeRequest, Planner};
-use safescope::policy::{CompiledPolicy, EvaluationContext, NormalizedPolicy, PolicyVersion};
+use safescope::policy::{
+    Authority, CompiledPolicy, EvaluationContext, NormalizedPolicy, PolicyVersion,
+};
 use safescope::store::content::ContentStore;
 use safescope::store::{DATA_DIR_ENV, StatePaths};
+use safescope::undo::Undo;
 use tempfile::TempDir;
 
 /// The policy the execution tests run against.
@@ -82,6 +85,7 @@ impl Harness {
             task: self.task,
             policy_version: PolicyVersion::FIRST,
             now: SystemTime::now(),
+            authority: Authority::Requested,
         }
     }
 
@@ -117,6 +121,30 @@ impl Harness {
     pub fn run(&mut self, request: ChangeRequest) -> safescope::error::Result<()> {
         let plan = self.plan(request)?;
         self.apply(&plan, None).map(|_| ())
+    }
+
+    /// Prepares and applies a reversal of the most recent operation.
+    pub fn undo(&mut self) -> safescope::error::Result<()> {
+        let snapshots = self.snapshots.clone();
+        let staging = self.staging.clone();
+        let plan = Undo {
+            workspace: &self.workspace,
+            policy: &self.policy,
+            journal: &mut self.journal,
+            snapshots: &snapshots,
+            staging: &staging,
+        }
+        .prepare(self.task, PolicyVersion::FIRST)?;
+
+        Undo {
+            workspace: &self.workspace,
+            policy: &self.policy,
+            journal: &mut self.journal,
+            snapshots: &snapshots,
+            staging: &staging,
+        }
+        .apply(&plan)
+        .map(|_| ())
     }
 
     pub fn write(&self, relative: &str, contents: &str) {

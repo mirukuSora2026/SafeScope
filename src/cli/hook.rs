@@ -26,7 +26,7 @@ use serde::{Deserialize, Serialize};
 use crate::domain::Operation;
 use crate::error::{Error, Result};
 use crate::paths::RelPath;
-use crate::policy::{CompiledPolicy, EvaluationContext, evaluate};
+use crate::policy::{Authority, CompiledPolicy, EvaluationContext, evaluate};
 use crate::registry;
 use crate::store::policy_store::PolicyStore;
 
@@ -125,6 +125,7 @@ fn decide(input: &HookInput) -> Option<String> {
         task: crate::ids::TaskId::new(),
         policy_version: approved.version,
         now: std::time::SystemTime::now(),
+        authority: Authority::Requested,
     };
 
     match evaluate(&path, operation, &compiled, &context).into_result() {

@@ -25,10 +25,10 @@ use crate::dataformatting::Msg;
 use crate::domain::{PathState, Transition};
 use crate::error::{Denial, Error, ErrorCode, Fault, Result};
 use crate::hash::ContentHash;
-use crate::ids::{OperationId, PlanId, RequestId, TaskId};
+use crate::ids::{OperationId, RequestId, TaskId};
 use crate::store::StatePaths;
 
-pub use self::record::{OperationKind, OperationRecord, Stage};
+pub use self::record::{NewOperation, OperationKind, OperationRecord, Stage};
 
 /// Bumped when the schema changes in a way older builds cannot read.
 const SCHEMA_VERSION: i64 = 1;
@@ -44,6 +44,7 @@ CREATE TABLE IF NOT EXISTS operations (
     task           TEXT NOT NULL,
     plan           TEXT NOT NULL,
     kind           TEXT NOT NULL,
+    reverses       TEXT,
     request        TEXT,
     request_digest TEXT,
     sequence       INTEGER NOT NULL,
@@ -109,16 +110,10 @@ impl Journal {
     ///
     /// Durable when this returns. Everything after it is allowed to assume a
     /// record exists describing what was intended.
-    #[allow(clippy::too_many_arguments)]
     pub fn record_prepared(
         &mut self,
-        task: TaskId,
-        plan: PlanId,
-        kind: OperationKind,
-        request: Option<RequestId>,
-        request_digest: Option<ContentHash>,
+        new: NewOperation,
         transition: &Transition,
-        payload: Option<ContentHash>,
     ) -> Result<OperationRecord> {
         let transaction = self
             .connection
@@ -140,15 +135,16 @@ impl Journal {
         let now = now_stored();
         let record = OperationRecord {
             id: OperationId::new(),
-            task,
-            plan,
-            kind,
-            request,
-            request_digest,
+            task: new.task,
+            plan: new.plan,
+            kind: new.kind,
+            reverses: new.reverses,
+            request: new.request,
+            request_digest: new.request_digest,
             sequence: sequence as u64,
             stage: Stage::Prepared,
             transition: transition.clone(),
-            payload,
+            payload: new.payload,
             observed: None,
             error_code: None,
             created_at: now,
@@ -158,14 +154,15 @@ impl Journal {
         transaction
             .execute(
                 "INSERT INTO operations
-                 (id, task, plan, kind, request, request_digest, sequence, stage,
+                 (id, task, plan, kind, reverses, request, request_digest, sequence, stage,
                   transition, payload, observed, error_code, created_at, updated_at)
-                 VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, NULL, NULL, ?11, ?11)",
+                 VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, NULL, NULL, ?12, ?12)",
                 params![
                     record.id.as_uuid().to_string(),
                     record.task.as_uuid().to_string(),
                     record.plan.as_uuid().to_string(),
                     record.kind.as_str(),
+                    record.reverses.map(|id| id.as_uuid().to_string()),
                     record.request.map(|id| id.as_uuid().to_string()),
                     record.request_digest.map(ContentHash::to_hex),
                     sequence,
@@ -286,9 +283,18 @@ impl Journal {
     ///
     /// Undo walks backwards, so this is the only one eligible: reversing an
     /// earlier operation would have to account for everything done since.
+    ///
+    /// Reversals and the operations they reversed are both skipped. Without
+    /// that, undoing twice would reverse the first undo and put the change back,
+    /// walking in a circle rather than backwards.
     pub fn last_undoable(&self, task: TaskId) -> Result<Option<OperationRecord>> {
         self.query_one(
-            "WHERE task = ?1 AND stage = 'committed' ORDER BY sequence DESC LIMIT 1",
+            "WHERE task = ?1
+               AND stage = 'committed'
+               AND kind = 'change'
+               AND id NOT IN (SELECT reverses FROM operations WHERE reverses IS NOT NULL)
+             ORDER BY sequence DESC
+             LIMIT 1",
             params![task.as_uuid().to_string()],
         )
     }
@@ -325,8 +331,8 @@ impl Journal {
 }
 
 const SELECT_COLUMNS: &str = "\
-SELECT id, task, plan, kind, request, request_digest, sequence, stage, transition,
-       payload, observed, error_code, created_at, updated_at
+SELECT id, task, plan, kind, reverses, request, request_digest, sequence, stage,
+       transition, payload, observed, error_code, created_at, updated_at
 FROM operations";
 
 /// Decodes a row, deferring parse failures so the query can report them.
@@ -342,28 +348,32 @@ fn decode_row(row: &rusqlite::Row<'_>) -> DecodedRow {
             task: parse_id(&get_text(1).map_err(failed)?)?,
             plan: parse_id(&get_text(2).map_err(failed)?)?,
             kind: OperationKind::parse(&get_text(3).map_err(failed)?).ok_or_else(corrupted)?,
-            request: optional_text(4)
+            reverses: optional_text(4)
                 .map_err(failed)?
                 .map(|text| parse_id(&text))
                 .transpose()?,
-            request_digest: optional_text(5)
+            request: optional_text(5)
+                .map_err(failed)?
+                .map(|text| parse_id(&text))
+                .transpose()?,
+            request_digest: optional_text(6)
                 .map_err(failed)?
                 .map(|text| ContentHash::from_hex(&text))
                 .transpose()?,
-            sequence: row.get::<_, i64>(6).map_err(failed)? as u64,
-            stage: Stage::parse(&get_text(7).map_err(failed)?).ok_or_else(corrupted)?,
-            transition: decode(&get_text(8).map_err(failed)?)?,
-            payload: optional_text(9)
+            sequence: row.get::<_, i64>(7).map_err(failed)? as u64,
+            stage: Stage::parse(&get_text(8).map_err(failed)?).ok_or_else(corrupted)?,
+            transition: decode(&get_text(9).map_err(failed)?)?,
+            payload: optional_text(10)
                 .map_err(failed)?
                 .map(|text| ContentHash::from_hex(&text))
                 .transpose()?,
-            observed: optional_text(10)
+            observed: optional_text(11)
                 .map_err(failed)?
                 .map(|text| decode(&text))
                 .transpose()?,
-            error_code: optional_text(11).map_err(failed)?,
-            created_at: from_millis(row.get::<_, i64>(12).map_err(failed)?),
-            updated_at: from_millis(row.get::<_, i64>(13).map_err(failed)?),
+            error_code: optional_text(12).map_err(failed)?,
+            created_at: from_millis(row.get::<_, i64>(13).map_err(failed)?),
+            updated_at: from_millis(row.get::<_, i64>(14).map_err(failed)?),
         })
     })())
 }

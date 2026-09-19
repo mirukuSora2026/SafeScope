@@ -12,7 +12,7 @@ use safescope::domain::Transition;
 use safescope::error::ErrorCode;
 use safescope::hash::ContentHash;
 use safescope::ids::PlanId;
-use safescope::journal::{OperationKind, Stage};
+use safescope::journal::{NewOperation, OperationKind, Stage};
 use safescope::planner::ChangeRequest;
 
 /// Room for three paths, four operations and one move.
@@ -210,13 +210,8 @@ fn an_operation_confirmed_not_to_have_run_gives_its_share_back() {
     let record = harness
         .journal
         .record_prepared(
-            harness.task,
-            PlanId::new(),
-            OperationKind::Change,
-            None,
-            None,
+            NewOperation::change(harness.task, PlanId::new()),
             &transition,
-            None,
         )
         .expect("record");
 
@@ -244,13 +239,8 @@ fn an_unfinished_operation_keeps_holding_its_share() {
     let record = harness
         .journal
         .record_prepared(
-            harness.task,
-            PlanId::new(),
-            OperationKind::Change,
-            None,
-            None,
+            NewOperation::change(harness.task, PlanId::new()),
             &transition,
-            None,
         )
         .expect("record");
     harness
@@ -270,13 +260,16 @@ fn undo_does_not_spend_the_change_budget() {
     let record = harness
         .journal
         .record_prepared(
-            harness.task,
-            PlanId::new(),
-            OperationKind::Undo,
-            None,
-            None,
+            NewOperation {
+                task: harness.task,
+                plan: PlanId::new(),
+                kind: OperationKind::Undo,
+                reverses: None,
+                request: None,
+                request_digest: None,
+                payload: None,
+            },
             &transition,
-            None,
         )
         .expect("record");
     harness
@@ -299,17 +292,12 @@ fn budget_belongs_to_one_task() {
         harness
             .journal
             .record_prepared(
-                other,
-                PlanId::new(),
-                OperationKind::Change,
-                None,
-                None,
+                NewOperation::change(other, PlanId::new()),
                 &Transition::create(
                     path(&format!("src/{name}.java")),
                     ContentHash::of_bytes(b"x"),
                     1,
                 ),
-                None,
             )
             .expect("record");
     }

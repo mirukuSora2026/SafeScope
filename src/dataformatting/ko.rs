@@ -98,6 +98,17 @@ pub(super) fn render(msg: &Msg) -> String {
             "아직 아무것도 바꿀 수 없습니다. 허용할 경로를 {policy} 에 적은 뒤 \
              `safescope policy approve` 를 실행하세요."
         ),
+        Msg::UndoNothingRecorded => "되돌릴 것이 없습니다. 이 작업에 완료된 연산이 \
+없습니다. 결과가 아직 불확실한 연산은 먼저 확정해야 합니다."
+            .to_owned(),
+        Msg::UndoConflictAt { path } => format!(
+            "{path} 이 SafeScope 가 마지막으로 건드린 뒤 바뀌었습니다. 되돌리면 그 뒤에 \
+             들어온 내용을 덮어씁니다. 아무것도 하지 않았습니다."
+        ),
+        Msg::HintCompareBeforeUndoing { path } => format!(
+            "{path} 을 보관된 이전 내용과 비교해서 무엇을 남길지 정하세요. 복구 자료는 \
+             어느 쪽이든 그대로 보관됩니다."
+        ),
         Msg::BudgetPathsExceeded {
             used,
             limit,

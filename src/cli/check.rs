@@ -23,7 +23,7 @@ use crate::error::{Denial, Error, ErrorCode, Result};
 use crate::ids::TaskId;
 use crate::paths::RelPath;
 use crate::policy::{
-    CompiledPolicy, Decision, EvaluationContext, NormalizedPolicy, RuleSource, evaluate,
+    Authority, CompiledPolicy, Decision, EvaluationContext, NormalizedPolicy, RuleSource, evaluate,
 };
 use crate::registry;
 use crate::store::policy_store::PolicyStore;
@@ -54,6 +54,7 @@ pub fn run(workspace: &Path, path: &str, operation: &str) -> Result<i32> {
         task: TaskId::new(),
         policy_version: approved.version,
         now: SystemTime::now(),
+        authority: Authority::Requested,
     };
     let decision = evaluate(&path, operation, &compiled, &context);
 
@@ -151,6 +152,8 @@ fn steps(decision: &Decision) -> Vec<(Label, String)> {
         Some(RuleSource::PolicyDeny) => 1,
         Some(RuleSource::PolicyAllow) => 2,
         Some(RuleSource::Grant(_)) => 3,
+        // `check` always asks as a caller would, so a reversal never reaches here.
+        Some(RuleSource::Reversal) => 3,
         None => order.len(),
     };
 

@@ -98,6 +98,17 @@ pub(super) fn render(msg: &Msg) -> String {
             "Пока ничего нельзя изменить. Добавьте разрешаемые пути в {policy}, затем \
              выполните `safescope policy approve`."
         ),
+        Msg::UndoNothingRecorded => "Отменять нечего: у этой задачи нет завершённых \
+операций. Операцию с неясным исходом нужно сначала разрешить."
+            .to_owned(),
+        Msg::UndoConflictAt { path } => format!(
+            "{path} изменился после того, как SafeScope трогал его в последний раз, поэтому \
+             отмена затёрла бы появившееся позже. Ничего не сделано."
+        ),
+        Msg::HintCompareBeforeUndoing { path } => format!(
+            "Сравните {path} с сохранённым прежним содержимым и решите, что оставить; \
+             данные восстановления сохраняются в любом случае."
+        ),
         Msg::BudgetPathsExceeded {
             used,
             limit,

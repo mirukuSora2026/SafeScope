@@ -11,8 +11,8 @@ use safescope::error::ErrorCode;
 use safescope::ids::{PlanId, TaskId};
 use safescope::paths::RelPath;
 use safescope::policy::{
-    ApprovalSource, CompiledPolicy, Decision, EvaluationContext, Grant, NormalizedPolicy,
-    PolicyVersion, RuleSource, evaluate, evaluate_move,
+    ApprovalSource, Authority, CompiledPolicy, Decision, EvaluationContext, Grant,
+    NormalizedPolicy, PolicyVersion, RuleSource, evaluate, evaluate_move,
 };
 
 fn path(text: &str) -> RelPath {
@@ -29,6 +29,7 @@ fn context<'a>(grants: &'a [Grant], task: TaskId) -> EvaluationContext<'a> {
         task,
         policy_version: PolicyVersion::FIRST,
         now: SystemTime::now(),
+        authority: Authority::Requested,
     }
 }
 

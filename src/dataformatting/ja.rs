@@ -104,6 +104,17 @@ pub(super) fn render(msg: &Msg) -> String {
             "まだ何も変更できません。許可したいパスを {policy} に書いてから \
              `safescope policy approve` を実行してください。"
         ),
+        Msg::UndoNothingRecorded => "元に戻すものがありません。このタスクには完了した\
+操作がありません。結果がまだ不明な操作は先に確定する必要があります。"
+            .to_owned(),
+        Msg::UndoConflictAt { path } => format!(
+            "{path} は SafeScope が最後に触れたあとに変更されています。元に戻すと\
+             その後に入った内容を上書きしてしまいます。何もしていません。"
+        ),
+        Msg::HintCompareBeforeUndoing { path } => format!(
+            "{path} を保存されている以前の内容と比較して、どちらを残すか決めてください。\
+             復旧データはいずれにせよ保管されています。"
+        ),
         Msg::BudgetPathsExceeded {
             used,
             limit,

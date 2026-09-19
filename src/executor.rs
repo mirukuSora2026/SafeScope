@@ -30,8 +30,8 @@ use crate::domain::{Operation, PathState, Phase};
 use crate::error::{Error, Result};
 use crate::fault::{self, FaultPoint};
 use crate::hash::ContentHash;
-use crate::ids::RequestId;
-use crate::journal::{Journal, OperationKind, OperationRecord, Stage};
+use crate::ids::{OperationId, RequestId};
+use crate::journal::{Journal, NewOperation, OperationKind, OperationRecord, Stage};
 use crate::path_guard::Workspace;
 use crate::paths::RelPath;
 use crate::planner::ChangePlan;
@@ -78,6 +78,20 @@ impl Executor<'_> {
         kind: OperationKind,
         request: Option<RequestKey>,
     ) -> Result<OperationRecord> {
+        self.apply_reversing(plan, kind, None, request)
+    }
+
+    /// Applies a plan that reverses `reverses`.
+    ///
+    /// Recording which operation was reversed is what stops a second undo from
+    /// reversing the first one and walking in a circle.
+    pub fn apply_reversing(
+        &mut self,
+        plan: &ChangePlan,
+        kind: OperationKind,
+        reverses: Option<OperationId>,
+        request: Option<RequestKey>,
+    ) -> Result<OperationRecord> {
         if plan.has_expired(SystemTime::now()) {
             return Err(Error::Denied(plan.expiry_denial()));
         }
@@ -107,15 +121,20 @@ impl Executor<'_> {
         }
 
         // I1: durable before anything is touched.
-        let record = self.journal.record_prepared(
-            plan.task,
-            plan.id,
+        let mut new = NewOperation {
+            task: plan.task,
+            plan: plan.id,
             kind,
-            request.map(|key| key.id),
-            request.map(|key| key.digest),
-            &plan.transition,
-            plan.payload,
-        )?;
+            reverses,
+            request: None,
+            request_digest: None,
+            payload: plan.payload,
+        };
+        if let Some(key) = request {
+            new = new.with_request(key.id, key.digest);
+        }
+
+        let record = self.journal.record_prepared(new, &plan.transition)?;
         fault::check(FaultPoint::AfterPreparedRecord);
 
         // I2: for a destructive operation the snapshot was stored at planning

@@ -26,7 +26,9 @@ use crate::ids::{PlanId, TaskId};
 use crate::journal::Journal;
 use crate::path_guard::Workspace;
 use crate::paths::RelPath;
-use crate::policy::{CompiledPolicy, EvaluationContext, PolicyVersion, evaluate, evaluate_move};
+use crate::policy::{
+    Authority, CompiledPolicy, EvaluationContext, PolicyVersion, evaluate, evaluate_move,
+};
 use crate::store::content::ContentStore;
 
 /// How long a plan stays applicable.
@@ -123,12 +125,17 @@ impl Planner<'_> {
         // refusal here leaves no snapshot and no staged payload behind.
         let transition = self.build_transition(request)?;
 
-        Budget {
-            limits: self.policy.budget(),
-            journal: self.journal,
-            snapshots: self.snapshots,
+        // Undo has its own resource checks; spending the change budget on it
+        // would let a full budget trap a person in the mess the limit existed to
+        // prevent.
+        if context.authority == Authority::Requested {
+            Budget {
+                limits: self.policy.budget(),
+                journal: self.journal,
+                snapshots: self.snapshots,
+            }
+            .check(context.task, &transition)?;
         }
-        .check(context.task, &transition)?;
 
         // I2: the previous contents become recoverable while the file is still
         // intact, not at the moment of overwriting.

@@ -35,6 +35,25 @@ use super::normalized::CompiledPolicy;
 use super::protected::{self, ProtectedReason};
 use super::{PolicyVersion, matcher::Pattern};
 
+/// On whose authority a change is being made.
+///
+/// Reversing an engine operation is not a new grant. The change being undone was
+/// already permitted when it was made, and policy-checking the reversal traps
+/// people: a rule that allows `create` and `replace` but not `trash` would let
+/// the engine create a file and then refuse to remove it again, leaving a person
+/// holding something they cannot undo through the tool that made it.
+///
+/// Protected paths still apply. The engine can never have changed one, so this
+/// costs nothing — but the protection should not depend on that being true.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum Authority {
+    /// A change the caller asked for. Evaluated in full.
+    #[default]
+    Requested,
+    /// Reversing an operation the journal records. Only protected paths apply.
+    Reversal,
+}
+
 /// Which kind of rule produced a decision.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum RuleSource {
@@ -46,6 +65,8 @@ pub enum RuleSource {
     PolicyAllow,
     /// A temporary approval.
     Grant(GrantId),
+    /// Reversing something the engine recorded doing.
+    Reversal,
 }
 
 /// Enough to point a person at the rule responsible.
@@ -126,6 +147,8 @@ pub struct EvaluationContext<'a> {
     pub task: TaskId,
     pub policy_version: PolicyVersion,
     pub now: SystemTime,
+    /// Whose authority the change is made on. See [`Authority`].
+    pub authority: Authority,
 }
 
 /// Decides whether `operation` may be performed on `path`.
@@ -143,6 +166,18 @@ pub fn evaluate(
                 line: None,
             }),
             denial: protected::denial(found.reason),
+        };
+    }
+
+    // Everything below this point decides whether a *new* change is permitted.
+    // Reversing a recorded one is not that question.
+    if context.authority == Authority::Reversal {
+        return Decision::Allow {
+            rule: RuleRef {
+                source: RuleSource::Reversal,
+                pattern: None,
+                line: None,
+            },
         };
     }
 

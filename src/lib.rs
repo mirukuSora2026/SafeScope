@@ -38,6 +38,7 @@ pub mod policy;
 pub mod recovery;
 pub mod registry;
 pub mod store;
+pub mod undo;
 
 pub use dataformatting::{Language, Msg};
 pub use domain::{

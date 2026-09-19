@@ -54,6 +54,11 @@ the tests.
   exits with anything but 0 or 2 is non-blocking, and a disabled hook never runs,
   so every check it performs is also performed inside the engine. Never write a
   check that exists only in the hook.
+- Undo is not a new grant. It reverses what the engine did under an approved
+  policy, so it skips scope evaluation (`Authority::Reversal`) and does not spend
+  the change budget. Protected paths still apply. Checking either would trap
+  people: a rule allowing `create` but not `trash` would let the engine make a
+  file it then refuses to remove.
 - Refuse what the platform cannot do properly; never emulate it. A no-overwrite
   rename that falls back to checking first reopens the race the flag closes, and
   a cross-filesystem move done as copy-then-delete is not one operation.
@@ -88,6 +93,7 @@ src/
 ├─ planner.rs          request → checked plan; stages payload, takes snapshot
 ├─ executor.rs         applies a plan in the order the invariants require
 ├─ budget.rs           how much a task may change (I5)
+├─ undo.rs             reversing the last recorded operation
 ├─ recovery.rs         what happened when the engine stopped mid-operation
 ├─ journal.rs          the record of what was done and attempted (I1)
 │  └─ record.rs        Stage, OperationRecord
@@ -103,7 +109,7 @@ src/
    └─ hook.rs           the PreToolUse hook
 ```
 
-Modules still to come: the workspace lock, undo, and the `mcp` adapter.
+Modules still to come: the workspace lock and the `mcp` adapter.
 
 ## Commands
 

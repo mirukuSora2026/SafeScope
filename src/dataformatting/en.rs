@@ -98,6 +98,17 @@ pub(super) fn render(msg: &Msg) -> String {
             "Nothing can be changed yet. Add the paths you want to allow to {policy}, then run \
              `safescope policy approve`."
         ),
+        Msg::UndoNothingRecorded => "There is nothing to undo: this task has no completed \
+operation. An operation whose outcome is still unclear has to be settled first."
+            .to_owned(),
+        Msg::UndoConflictAt { path } => format!(
+            "{path} has changed since SafeScope last touched it, so undoing would overwrite \
+             whatever arrived afterwards. Nothing was done."
+        ),
+        Msg::HintCompareBeforeUndoing { path } => format!(
+            "Compare {path} against the stored previous contents and decide what should \
+             survive; the recovery data is kept either way."
+        ),
         Msg::BudgetPathsExceeded {
             used,
             limit,

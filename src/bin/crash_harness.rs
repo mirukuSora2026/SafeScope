@@ -22,7 +22,7 @@ use safescope::journal::Journal;
 use safescope::path_guard::Workspace;
 use safescope::paths::RelPath;
 use safescope::planner::{ChangeRequest, Planner};
-use safescope::policy::{CompiledPolicy, EvaluationContext, PolicyVersion};
+use safescope::policy::{Authority, CompiledPolicy, EvaluationContext, PolicyVersion};
 use safescope::registry;
 use safescope::store::content::ContentStore;
 use safescope::store::policy_store::PolicyStore;
@@ -92,6 +92,7 @@ fn apply(root: &Path, operation: &str) -> Result<()> {
         task,
         policy_version: PolicyVersion::FIRST,
         now: std::time::SystemTime::now(),
+        authority: Authority::Requested,
     };
 
     let request = match operation {

@@ -15,7 +15,8 @@ pub mod validate;
 
 pub use self::defaults::SCHEMA_VERSION;
 pub use self::evaluate::{
-    Decision, EvaluationContext, MoveDecision, RuleRef, RuleSource, evaluate, evaluate_move,
+    Authority, Decision, EvaluationContext, MoveDecision, RuleRef, RuleSource, evaluate,
+    evaluate_move,
 };
 pub use self::file::{PolicyDocument, PolicyFile};
 pub use self::grant::{ApprovalSource, Grant};

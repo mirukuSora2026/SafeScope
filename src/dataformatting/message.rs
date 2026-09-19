@@ -123,6 +123,15 @@ pub enum Msg {
         policy: String,
     },
 
+    // ── Undo ───────────────────────────────────────────────────────────
+    UndoNothingRecorded,
+    UndoConflictAt {
+        path: String,
+    },
+    HintCompareBeforeUndoing {
+        path: String,
+    },
+
     // ── Budget ─────────────────────────────────────────────────────────
     BudgetPathsExceeded {
         used: u64,

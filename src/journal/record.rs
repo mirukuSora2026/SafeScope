@@ -131,6 +131,64 @@ impl std::fmt::Display for OperationKind {
     }
 }
 
+/// What a new operation needs to be recorded.
+///
+/// A struct rather than eight positional arguments, because several of them are
+/// optional identifiers and getting two of them the wrong way round would be
+/// silent.
+#[derive(Debug, Clone, Copy)]
+pub struct NewOperation {
+    pub task: TaskId,
+    pub plan: PlanId,
+    pub kind: OperationKind,
+    /// Set when this operation reverses another.
+    pub reverses: Option<OperationId>,
+    pub request: Option<RequestId>,
+    pub request_digest: Option<ContentHash>,
+    pub payload: Option<ContentHash>,
+}
+
+impl NewOperation {
+    /// A change the caller asked for.
+    pub const fn change(task: TaskId, plan: PlanId) -> Self {
+        Self {
+            task,
+            plan,
+            kind: OperationKind::Change,
+            reverses: None,
+            request: None,
+            request_digest: None,
+            payload: None,
+        }
+    }
+
+    /// A reversal of `reverses`.
+    pub const fn undo(task: TaskId, plan: PlanId, reverses: OperationId) -> Self {
+        Self {
+            task,
+            plan,
+            kind: OperationKind::Undo,
+            reverses: Some(reverses),
+            request: None,
+            request_digest: None,
+            payload: None,
+        }
+    }
+
+    #[must_use]
+    pub const fn with_request(mut self, request: RequestId, request_digest: ContentHash) -> Self {
+        self.request = Some(request);
+        self.request_digest = Some(request_digest);
+        self
+    }
+
+    #[must_use]
+    pub const fn with_payload(mut self, payload: Option<ContentHash>) -> Self {
+        self.payload = payload;
+        self
+    }
+}
+
 /// One operation, as the journal holds it.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct OperationRecord {
@@ -138,6 +196,11 @@ pub struct OperationRecord {
     pub task: TaskId,
     pub plan: PlanId,
     pub kind: OperationKind,
+    /// The operation this one reverses, for an undo.
+    ///
+    /// Without it, undoing twice would reverse the first undo and put the
+    /// change back — walking in a circle rather than backwards.
+    pub reverses: Option<OperationId>,
     /// The caller's idempotency key, when one was given.
     pub request: Option<RequestId>,
     /// Hash of the request that produced this operation, so a resend can be
