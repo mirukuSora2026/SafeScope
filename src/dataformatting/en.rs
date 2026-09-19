@@ -57,6 +57,25 @@ pub(super) fn render(msg: &Msg) -> String {
         Msg::PolicySchemaUnsupported { found, supported } => format!(
             "Unsupported policy schema_version {found}; this build understands {supported}."
         ),
+        Msg::WorkspaceOpenFailed { root, reason } => {
+            format!("The workspace at {root} could not be opened: {reason}")
+        }
+        Msg::PathNotARegularFile { path } => {
+            format!("{path} is not a regular file. This version handles single regular files only.")
+        }
+        Msg::PathComponentNotADirectory { path, component } => {
+            format!("While resolving {path}, {component:?} is not a directory.")
+        }
+        Msg::PathSymlinkRefused { path } => format!(
+            "{path} is a symbolic link. Following one would move the operation outside the \
+             path that was checked, so it is refused rather than resolved."
+        ),
+        Msg::PathParentMissing { path, parent } => {
+            format!("{path} cannot be created because the directory {parent} does not exist.")
+        }
+        Msg::HintCreateTheDirectoryFirst => "This version does not create directories. Create \
+it yourself, then retry."
+            .to_owned(),
         Msg::ScopeNotCovered { path } => {
             format!("{path} matches no rule in the allowed scope.")
         }

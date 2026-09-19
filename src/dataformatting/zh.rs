@@ -51,6 +51,22 @@ pub(super) fn render(msg: &Msg) -> String {
         Msg::PolicySchemaUnsupported { found, supported } => {
             format!("不支持的策略 schema_version {found}；此版本支持 {supported}。")
         }
+        Msg::WorkspaceOpenFailed { root, reason } => {
+            format!("无法打开位于 {root} 的工作区：{reason}")
+        }
+        Msg::PathNotARegularFile { path } => {
+            format!("{path} 不是普通文件。此版本仅处理单个普通文件。")
+        }
+        Msg::PathComponentNotADirectory { path, component } => {
+            format!("解析 {path} 时，{component:?} 不是目录。")
+        }
+        Msg::PathSymlinkRefused { path } => {
+            format!("{path} 是符号链接。跟随它会让操作离开已检查的路径，因此予以拒绝而非解析。")
+        }
+        Msg::PathParentMissing { path, parent } => {
+            format!("目录 {parent} 不存在，因此无法创建 {path}。")
+        }
+        Msg::HintCreateTheDirectoryFirst => "此版本不会创建目录。请自行创建后重试。".to_owned(),
         Msg::ScopeNotCovered { path } => {
             format!("{path} 不匹配允许范围中的任何规则。")
         }

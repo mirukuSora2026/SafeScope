@@ -194,6 +194,27 @@ pub enum Msg {
         supported: u32,
     },
 
+    // ── Workspace and path resolution ──────────────────────────────────
+    WorkspaceOpenFailed {
+        root: String,
+        reason: String,
+    },
+    PathNotARegularFile {
+        path: String,
+    },
+    PathComponentNotADirectory {
+        path: String,
+        component: String,
+    },
+    PathSymlinkRefused {
+        path: String,
+    },
+    PathParentMissing {
+        path: String,
+        parent: String,
+    },
+    HintCreateTheDirectoryFirst,
+
     // ── Scope evaluation ───────────────────────────────────────────────
     ScopeNotCovered {
         path: String,

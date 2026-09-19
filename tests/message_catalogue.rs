@@ -66,6 +66,23 @@ fn every_language_renders_every_message() {
             found: 9,
             supported: 1,
         },
+        Msg::WorkspaceOpenFailed {
+            root: "/p".into(),
+            reason: "no such file".into(),
+        },
+        Msg::PathNotARegularFile { path: "src".into() },
+        Msg::PathComponentNotADirectory {
+            path: "a/b".into(),
+            component: "a".into(),
+        },
+        Msg::PathSymlinkRefused {
+            path: "src/link".into(),
+        },
+        Msg::PathParentMissing {
+            path: "a/b/c.rs".into(),
+            parent: "a/b".into(),
+        },
+        Msg::HintCreateTheDirectoryFirst,
         Msg::ScopeNotCovered {
             path: "src/a.rs".into(),
         },
@@ -133,7 +150,7 @@ fn every_language_renders_every_message() {
     // omission.
     assert_eq!(
         samples.len(),
-        44,
+        50,
         "add the new Msg variant to this list, then update the count"
     );
 

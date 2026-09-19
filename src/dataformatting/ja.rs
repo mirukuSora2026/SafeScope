@@ -61,6 +61,27 @@ pub(super) fn render(msg: &Msg) -> String {
             "サポートされていないポリシーの schema_version {found} です。\
              このビルドが理解するのは {supported} です。"
         ),
+        Msg::WorkspaceOpenFailed { root, reason } => {
+            format!("{root} のワークスペースを開けませんでした: {reason}")
+        }
+        Msg::PathNotARegularFile { path } => {
+            format!(
+                "{path} は通常ファイルではありません。このバージョンは通常ファイルのみ扱います。"
+            )
+        }
+        Msg::PathComponentNotADirectory { path, component } => {
+            format!("{path} の解決中に {component:?} がディレクトリではありませんでした。")
+        }
+        Msg::PathSymlinkRefused { path } => format!(
+            "{path} はシンボリックリンクです。たどると検査したパスの外で操作することに\
+             なるため、解決せずに拒否します。"
+        ),
+        Msg::PathParentMissing { path, parent } => {
+            format!("ディレクトリ {parent} が存在しないため {path} を作成できません。")
+        }
+        Msg::HintCreateTheDirectoryFirst => "このバージョンはディレクトリを作成しません。\
+自分で作成してから再試行してください。"
+            .to_owned(),
         Msg::ScopeNotCovered { path } => {
             format!("{path} は許可範囲のどのルールにも一致しません。")
         }

@@ -26,6 +26,7 @@ pub mod error;
 pub mod fault;
 pub mod hash;
 pub mod ids;
+pub mod path_guard;
 pub mod paths;
 pub mod policy;
 
@@ -36,4 +37,5 @@ pub use domain::{
 pub use error::{Denial, Error, ErrorCode, ErrorKind, ErrorReport, Fault, Result};
 pub use hash::ContentHash;
 pub use ids::{GrantId, OperationId, PlanId, RequestId, ReservationId, TaskId, WorkspaceId};
+pub use path_guard::{Resolved, Workspace};
 pub use paths::RelPath;

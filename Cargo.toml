@@ -9,6 +9,7 @@ fault-injection = []
 
 [dependencies]
 blake3 = "1.8.7"
+cap-std = "4.0.3"
 globset = "0.4.20"
 serde = { version = "1.0.229", features = ["derive"] }
 thiserror = "2.0.20"
@@ -18,3 +19,4 @@ uuid = { version = "1.26.1", features = ["v4", "serde"] }
 
 [dev-dependencies]
 serde_json = "1.0.151"
+tempfile = "3.27.0"

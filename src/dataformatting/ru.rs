@@ -57,6 +57,25 @@ pub(super) fn render(msg: &Msg) -> String {
         Msg::PolicySchemaUnsupported { found, supported } => format!(
             "Неподдерживаемая версия схемы политики {found}; эта сборка понимает {supported}."
         ),
+        Msg::WorkspaceOpenFailed { root, reason } => {
+            format!("Не удалось открыть рабочее пространство в {root}: {reason}")
+        }
+        Msg::PathNotARegularFile { path } => format!(
+            "{path} не является обычным файлом. Эта версия работает только с обычными файлами."
+        ),
+        Msg::PathComponentNotADirectory { path, component } => {
+            format!("При разборе {path} компонент {component:?} не является каталогом.")
+        }
+        Msg::PathSymlinkRefused { path } => format!(
+            "{path} — символическая ссылка. Переход по ней вывел бы операцию за пределы \
+             проверенного пути, поэтому она отклоняется, а не разрешается."
+        ),
+        Msg::PathParentMissing { path, parent } => {
+            format!("{path} нельзя создать: каталог {parent} не существует.")
+        }
+        Msg::HintCreateTheDirectoryFirst => "Эта версия не создаёт каталоги. Создайте его \
+самостоятельно и повторите."
+            .to_owned(),
         Msg::ScopeNotCovered { path } => {
             format!("{path} не подпадает ни под одно правило разрешённой области.")
         }

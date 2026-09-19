@@ -57,6 +57,25 @@ pub(super) fn render(msg: &Msg) -> String {
             "지원하지 않는 정책 schema_version {found} 입니다. 이 빌드는 {supported} 을 \
              이해합니다."
         ),
+        Msg::WorkspaceOpenFailed { root, reason } => {
+            format!("{root} 의 작업 공간을 열지 못했습니다: {reason}")
+        }
+        Msg::PathNotARegularFile { path } => {
+            format!("{path} 은 일반 파일이 아닙니다. 이 버전은 일반 파일 하나씩만 다룹니다.")
+        }
+        Msg::PathComponentNotADirectory { path, component } => {
+            format!("{path} 을 해석하는 중 {component:?} 이 디렉터리가 아닙니다.")
+        }
+        Msg::PathSymlinkRefused { path } => format!(
+            "{path} 은 심볼릭 링크입니다. 따라가면 검사한 경로 밖에서 작업하게 되므로 \
+             해석하지 않고 거부합니다."
+        ),
+        Msg::PathParentMissing { path, parent } => {
+            format!("{parent} 디렉터리가 없어서 {path} 을 만들 수 없습니다.")
+        }
+        Msg::HintCreateTheDirectoryFirst => "이 버전은 디렉터리를 만들지 않습니다. 직접 만든 \
+뒤에 다시 시도하세요."
+            .to_owned(),
         Msg::ScopeNotCovered { path } => {
             format!("{path} 은 허용 범위의 어떤 규칙에도 해당하지 않습니다.")
         }
