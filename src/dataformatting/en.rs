@@ -40,6 +40,17 @@ pub(super) fn render(msg: &Msg) -> String {
         Msg::PathTooDeep { depth, limit } => {
             format!("The path is too deep ({depth} levels; the limit is {limit}).")
         }
+        Msg::PatternEmpty => "A policy pattern is empty.".to_owned(),
+        Msg::PatternAbsolute { pattern } => format!(
+            "The policy pattern {pattern:?} is absolute. Patterns are relative to the \
+             workspace root."
+        ),
+        Msg::PatternTraversal { pattern } => {
+            format!("The policy pattern {pattern:?} contains '..', which is not allowed.")
+        }
+        Msg::PatternInvalidGlob { pattern, reason } => {
+            format!("The policy pattern {pattern:?} is not a valid glob: {reason}")
+        }
         Msg::HashBadLength { len } => {
             format!("The hash has the wrong length ({len} characters; 64 are required).")
         }

@@ -35,6 +35,16 @@ pub(super) fn render(msg: &Msg) -> String {
         Msg::PathTooDeep { depth, limit } => {
             format!("路径层级过深（{depth} 层，上限为 {limit}）。")
         }
+        Msg::PatternEmpty => "存在空的策略模式。".to_owned(),
+        Msg::PatternAbsolute { pattern } => {
+            format!("策略模式 {pattern:?} 是绝对路径。模式相对于工作区根目录。")
+        }
+        Msg::PatternTraversal { pattern } => {
+            format!("策略模式 {pattern:?} 包含 '..'，这是不允许的。")
+        }
+        Msg::PatternInvalidGlob { pattern, reason } => {
+            format!("策略模式 {pattern:?} 不是有效的 glob：{reason}")
+        }
         Msg::HashBadLength { len } => {
             format!("哈希长度不正确（{len} 个字符，应为 64 个）。")
         }

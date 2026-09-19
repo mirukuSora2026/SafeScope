@@ -149,6 +149,12 @@ pub enum Msg {
     PathReservedPrefixHint,
     PathTooDeep { depth: usize, limit: usize },
 
+    // ── Policy patterns ────────────────────────────────────────────────
+    PatternEmpty,
+    PatternAbsolute { pattern: String },
+    PatternTraversal { pattern: String },
+    PatternInvalidGlob { pattern: String, reason: String },
+
     // ── Content hash ───────────────────────────────────────────────────
     HashBadLength { len: usize },
     HashNotHexadecimal { text: String },
@@ -283,6 +289,17 @@ mod tests {
             Msg::PathTooDeep {
                 depth: 65,
                 limit: 64,
+            },
+            Msg::PatternEmpty,
+            Msg::PatternAbsolute {
+                pattern: "/etc/**".into(),
+            },
+            Msg::PatternTraversal {
+                pattern: "../**".into(),
+            },
+            Msg::PatternInvalidGlob {
+                pattern: "[".into(),
+                reason: "unclosed".into(),
             },
             Msg::HashBadLength { len: 3 },
             Msg::HashNotHexadecimal { text: "zz".into() },

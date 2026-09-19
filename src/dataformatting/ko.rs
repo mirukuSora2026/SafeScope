@@ -40,6 +40,16 @@ pub(super) fn render(msg: &Msg) -> String {
         Msg::PathTooDeep { depth, limit } => {
             format!("경로 깊이가 너무 깊습니다 ({depth} 단계, 한계 {limit}).")
         }
+        Msg::PatternEmpty => "비어 있는 정책 패턴이 있습니다.".to_owned(),
+        Msg::PatternAbsolute { pattern } => {
+            format!("정책 패턴 {pattern:?} 이 절대 경로입니다. 패턴은 작업 공간 루트 기준입니다.")
+        }
+        Msg::PatternTraversal { pattern } => {
+            format!("정책 패턴 {pattern:?} 에 '..' 이 있습니다. 허용하지 않습니다.")
+        }
+        Msg::PatternInvalidGlob { pattern, reason } => {
+            format!("정책 패턴 {pattern:?} 이 올바른 glob 이 아닙니다: {reason}")
+        }
         Msg::HashBadLength { len } => {
             format!("해시 길이가 잘못됐습니다 ({len} 글자, 64 글자여야 합니다).")
         }

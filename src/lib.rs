@@ -27,6 +27,7 @@ pub mod fault;
 pub mod hash;
 pub mod ids;
 pub mod paths;
+pub mod policy;
 
 pub use dataformatting::{Language, Msg};
 pub use domain::{

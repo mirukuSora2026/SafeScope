@@ -1,0 +1,9 @@
+//! Policy: what may be changed, how, and within what limits.
+//!
+//! The engine never reads the editable `policy.toml` directly. It reads an
+//! approved snapshot, so editing the file grants nothing until a person approves
+//! it at a terminal.
+
+pub mod matcher;
+
+pub use self::matcher::{CaseSensitivity, Pattern, PatternSet};

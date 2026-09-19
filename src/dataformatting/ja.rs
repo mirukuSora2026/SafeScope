@@ -43,6 +43,17 @@ pub(super) fn render(msg: &Msg) -> String {
         Msg::PathTooDeep { depth, limit } => {
             format!("パスの階層が深すぎます（{depth} 段、上限は {limit}）。")
         }
+        Msg::PatternEmpty => "空のポリシーパターンがあります。".to_owned(),
+        Msg::PatternAbsolute { pattern } => format!(
+            "ポリシーパターン {pattern:?} は絶対パスです。パターンはワークスペース\
+             ルートからの相対指定です。"
+        ),
+        Msg::PatternTraversal { pattern } => {
+            format!("ポリシーパターン {pattern:?} に '..' が含まれています。許可されていません。")
+        }
+        Msg::PatternInvalidGlob { pattern, reason } => {
+            format!("ポリシーパターン {pattern:?} は有効な glob ではありません: {reason}")
+        }
         Msg::HashBadLength { len } => {
             format!("ハッシュの長さが不正です（{len} 文字、64 文字である必要があります）。")
         }

@@ -40,6 +40,17 @@ pub(super) fn render(msg: &Msg) -> String {
         Msg::PathTooDeep { depth, limit } => {
             format!("Путь слишком глубокий ({depth} уровней, предел — {limit}).")
         }
+        Msg::PatternEmpty => "Шаблон политики пуст.".to_owned(),
+        Msg::PatternAbsolute { pattern } => format!(
+            "Шаблон политики {pattern:?} абсолютный. Шаблоны задаются относительно \
+             корня рабочего пространства."
+        ),
+        Msg::PatternTraversal { pattern } => {
+            format!("Шаблон политики {pattern:?} содержит '..', что не допускается.")
+        }
+        Msg::PatternInvalidGlob { pattern, reason } => {
+            format!("Шаблон политики {pattern:?} не является корректным glob: {reason}")
+        }
         Msg::HashBadLength { len } => {
             format!("Неверная длина хеша ({len} символов, требуется 64).")
         }
