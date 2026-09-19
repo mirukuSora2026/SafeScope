@@ -194,6 +194,25 @@ pub enum Msg {
         supported: u32,
     },
 
+    // ── Workspace registration ─────────────────────────────────────────
+    WorkspaceAlreadyRegistered {
+        root: String,
+    },
+    WorkspaceNotRegistered {
+        root: String,
+    },
+    WorkspaceIdCorrupted {
+        path: String,
+    },
+    WorkspaceRegistered {
+        root: String,
+        id: String,
+    },
+    HintRunInitFirst,
+    HintFillInAllowThenApprove {
+        policy: String,
+    },
+
     // ── Engine state store ─────────────────────────────────────────────
     StoreDataDirectoryUnavailable,
     StoreWriteFailed {

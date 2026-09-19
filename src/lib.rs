@@ -29,6 +29,7 @@ pub mod ids;
 pub mod path_guard;
 pub mod paths;
 pub mod policy;
+pub mod registry;
 pub mod store;
 
 pub use dataformatting::{Language, Msg};

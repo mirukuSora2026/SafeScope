@@ -66,6 +66,19 @@ fn every_language_renders_every_message() {
             found: 9,
             supported: 1,
         },
+        Msg::WorkspaceAlreadyRegistered { root: "/p".into() },
+        Msg::WorkspaceNotRegistered { root: "/p".into() },
+        Msg::WorkspaceIdCorrupted {
+            path: "/p/.safescope/workspace-id".into(),
+        },
+        Msg::WorkspaceRegistered {
+            root: "/p".into(),
+            id: "ws_1".into(),
+        },
+        Msg::HintRunInitFirst,
+        Msg::HintFillInAllowThenApprove {
+            policy: ".safescope/policy.toml".into(),
+        },
         Msg::StoreDataDirectoryUnavailable,
         Msg::StoreWriteFailed {
             path: "/s/x".into(),
@@ -167,7 +180,7 @@ fn every_language_renders_every_message() {
     // omission.
     assert_eq!(
         samples.len(),
-        55,
+        61,
         "add the new Msg variant to this list, then update the count"
     );
 

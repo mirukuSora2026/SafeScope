@@ -57,6 +57,23 @@ pub(super) fn render(msg: &Msg) -> String {
         Msg::PolicySchemaUnsupported { found, supported } => format!(
             "Unsupported policy schema_version {found}; this build understands {supported}."
         ),
+        Msg::WorkspaceAlreadyRegistered { root } => {
+            format!("{root} is already a SafeScope workspace.")
+        }
+        Msg::WorkspaceNotRegistered { root } => {
+            format!("{root} is not a SafeScope workspace.")
+        }
+        Msg::WorkspaceIdCorrupted { path } => {
+            format!("The workspace identity at {path} is not readable.")
+        }
+        Msg::WorkspaceRegistered { root, id } => {
+            format!("Registered {root} as workspace {id}.")
+        }
+        Msg::HintRunInitFirst => "Run `safescope init` in the project first.".to_owned(),
+        Msg::HintFillInAllowThenApprove { policy } => format!(
+            "Nothing can be changed yet. Add the paths you want to allow to {policy}, then run \
+             `safescope policy approve`."
+        ),
         Msg::StoreDataDirectoryUnavailable => "No directory is available for engine state. \
 Set SAFESCOPE_DATA_DIR to choose one."
             .to_owned(),

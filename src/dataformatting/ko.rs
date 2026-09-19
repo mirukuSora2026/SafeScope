@@ -57,6 +57,23 @@ pub(super) fn render(msg: &Msg) -> String {
             "지원하지 않는 정책 schema_version {found} 입니다. 이 빌드는 {supported} 을 \
              이해합니다."
         ),
+        Msg::WorkspaceAlreadyRegistered { root } => {
+            format!("{root} 은 이미 SafeScope 작업 공간입니다.")
+        }
+        Msg::WorkspaceNotRegistered { root } => {
+            format!("{root} 은 SafeScope 작업 공간이 아닙니다.")
+        }
+        Msg::WorkspaceIdCorrupted { path } => {
+            format!("{path} 의 작업 공간 식별자를 읽을 수 없습니다.")
+        }
+        Msg::WorkspaceRegistered { root, id } => {
+            format!("{root} 을 작업 공간 {id} 로 등록했습니다.")
+        }
+        Msg::HintRunInitFirst => "프로젝트에서 `safescope init` 을 먼저 실행하세요.".to_owned(),
+        Msg::HintFillInAllowThenApprove { policy } => format!(
+            "아직 아무것도 바꿀 수 없습니다. 허용할 경로를 {policy} 에 적은 뒤 \
+             `safescope policy approve` 를 실행하세요."
+        ),
         Msg::StoreDataDirectoryUnavailable => "엔진 상태를 둘 디렉터리를 찾을 수 없습니다. \
 SAFESCOPE_DATA_DIR 로 지정하세요."
             .to_owned(),

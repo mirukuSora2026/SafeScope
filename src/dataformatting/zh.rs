@@ -51,6 +51,24 @@ pub(super) fn render(msg: &Msg) -> String {
         Msg::PolicySchemaUnsupported { found, supported } => {
             format!("不支持的策略 schema_version {found}；此版本支持 {supported}。")
         }
+        Msg::WorkspaceAlreadyRegistered { root } => {
+            format!("{root} 已经是 SafeScope 工作区。")
+        }
+        Msg::WorkspaceNotRegistered { root } => {
+            format!("{root} 不是 SafeScope 工作区。")
+        }
+        Msg::WorkspaceIdCorrupted { path } => {
+            format!("无法读取位于 {path} 的工作区标识。")
+        }
+        Msg::WorkspaceRegistered { root, id } => {
+            format!("已将 {root} 注册为工作区 {id}。")
+        }
+        Msg::HintRunInitFirst => "请先在项目中运行 `safescope init`。".to_owned(),
+        Msg::HintFillInAllowThenApprove { policy } => {
+            format!(
+                "目前还不能更改任何内容。请在 {policy} 中填写要允许的路径，然后运行 `safescope policy approve`。"
+            )
+        }
         Msg::StoreDataDirectoryUnavailable => "找不到用于存放引擎状态的目录。\
 请设置 SAFESCOPE_DATA_DIR 指定一个。"
             .to_owned(),

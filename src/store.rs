@@ -73,7 +73,7 @@ impl StatePaths {
             && state.starts_with(&workspace)
         {
             return Err(Error::Denied(Denial::new(
-                ErrorCode::WorkspaceNotRegistered,
+                ErrorCode::WorkspaceStateUnusable,
                 Msg::StoreStateInsideWorkspace {
                     state: state.display().to_string(),
                     workspace: workspace.display().to_string(),

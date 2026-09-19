@@ -57,6 +57,23 @@ pub(super) fn render(msg: &Msg) -> String {
         Msg::PolicySchemaUnsupported { found, supported } => format!(
             "Неподдерживаемая версия схемы политики {found}; эта сборка понимает {supported}."
         ),
+        Msg::WorkspaceAlreadyRegistered { root } => {
+            format!("{root} уже является рабочим пространством SafeScope.")
+        }
+        Msg::WorkspaceNotRegistered { root } => {
+            format!("{root} не является рабочим пространством SafeScope.")
+        }
+        Msg::WorkspaceIdCorrupted { path } => {
+            format!("Идентификатор рабочего пространства в {path} нечитаем.")
+        }
+        Msg::WorkspaceRegistered { root, id } => {
+            format!("{root} зарегистрирован как рабочее пространство {id}.")
+        }
+        Msg::HintRunInitFirst => "Сначала выполните `safescope init` в проекте.".to_owned(),
+        Msg::HintFillInAllowThenApprove { policy } => format!(
+            "Пока ничего нельзя изменить. Добавьте разрешаемые пути в {policy}, затем \
+             выполните `safescope policy approve`."
+        ),
         Msg::StoreDataDirectoryUnavailable => "Не найден каталог для состояния движка. \
 Укажите его через SAFESCOPE_DATA_DIR."
             .to_owned(),

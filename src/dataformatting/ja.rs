@@ -61,6 +61,25 @@ pub(super) fn render(msg: &Msg) -> String {
             "サポートされていないポリシーの schema_version {found} です。\
              このビルドが理解するのは {supported} です。"
         ),
+        Msg::WorkspaceAlreadyRegistered { root } => {
+            format!("{root} はすでに SafeScope のワークスペースです。")
+        }
+        Msg::WorkspaceNotRegistered { root } => {
+            format!("{root} は SafeScope のワークスペースではありません。")
+        }
+        Msg::WorkspaceIdCorrupted { path } => {
+            format!("{path} のワークスペース識別子を読み取れません。")
+        }
+        Msg::WorkspaceRegistered { root, id } => {
+            format!("{root} をワークスペース {id} として登録しました。")
+        }
+        Msg::HintRunInitFirst => {
+            "先にプロジェクトで `safescope init` を実行してください。".to_owned()
+        }
+        Msg::HintFillInAllowThenApprove { policy } => format!(
+            "まだ何も変更できません。許可したいパスを {policy} に書いてから \
+             `safescope policy approve` を実行してください。"
+        ),
         Msg::StoreDataDirectoryUnavailable => "エンジン状態を置くディレクトリが見つかりません。\
 SAFESCOPE_DATA_DIR で指定してください。"
             .to_owned(),

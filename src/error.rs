@@ -86,6 +86,10 @@ pub enum ErrorCode {
     // ── Workspace ──────────────────────────────────────────────────────
     /// Not a registered workspace.
     WorkspaceNotRegistered,
+    /// Already a registered workspace.
+    WorkspaceAlreadyRegistered,
+    /// This project cannot be registered: its state would be unusable.
+    WorkspaceStateUnusable,
     /// Another process is writing to this workspace.
     WorkspaceBusy,
 
@@ -126,6 +130,8 @@ impl ErrorCode {
             PlanExpired => "PLAN_EXPIRED",
             RequestMismatch => "REQUEST_MISMATCH",
             WorkspaceNotRegistered => "WORKSPACE_NOT_REGISTERED",
+            WorkspaceAlreadyRegistered => "WORKSPACE_ALREADY_REGISTERED",
+            WorkspaceStateUnusable => "WORKSPACE_STATE_UNUSABLE",
             WorkspaceBusy => "WORKSPACE_BUSY",
             SnapshotFailed => "SNAPSHOT_FAILED",
             JournalFailed => "JOURNAL_FAILED",
@@ -157,7 +163,9 @@ impl ErrorCode {
             | PlanNotFound
             | PlanExpired
             | RequestMismatch
-            | WorkspaceNotRegistered => ErrorKind::Denial,
+            | WorkspaceNotRegistered
+            | WorkspaceAlreadyRegistered
+            | WorkspaceStateUnusable => ErrorKind::Denial,
 
             StateUncertain | WorkspaceBusy | SnapshotFailed | JournalFailed | IoFailed
             | Internal => ErrorKind::Fault,

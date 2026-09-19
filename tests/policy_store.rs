@@ -156,7 +156,7 @@ fn state_is_refused_inside_the_workspace_it_protects() {
 
     let error = StatePaths::for_workspace(WorkspaceId::new(), workspace.path())
         .expect_err("registration must be refused");
-    assert_eq!(error.code(), ErrorCode::WorkspaceNotRegistered);
+    assert_eq!(error.code(), ErrorCode::WorkspaceStateUnusable);
     assert!(error.is_denial());
 }
 
