@@ -11,7 +11,7 @@
 
 use std::ops::Range;
 
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 use toml::Spanned;
 
 use crate::dataformatting::Msg;
@@ -163,7 +163,7 @@ pub struct ApprovalSection {
 }
 
 /// Whether an expansion may be requested at all.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
 pub enum ExpansionPolicy {
     /// The engine may ask the user.
@@ -208,7 +208,7 @@ pub struct RecoverySection {
 }
 
 /// How a recovery conflict is handled.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
 pub enum ConflictAction {
     /// Report the conflict and change nothing.
