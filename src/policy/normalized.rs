@@ -13,7 +13,8 @@ use serde::{Deserialize, Serialize};
 use crate::domain::{OpSet, Operation};
 use crate::error::Denial;
 
-use super::file::{ConflictAction, ExpansionPolicy, PolicyDocument, SCHEMA_VERSION};
+use super::defaults::SCHEMA_VERSION;
+use super::file::{ConflictAction, ExpansionPolicy, PolicyDocument};
 use super::matcher::{CaseSensitivity, Pattern, PatternSet};
 use super::protected::ProtectedPaths;
 
