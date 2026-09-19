@@ -80,6 +80,11 @@ fn every_language_renders_every_message() {
         Msg::HintFillInAllowThenApprove {
             policy: ".safescope/policy.toml".into(),
         },
+        Msg::SnapshotVerificationFailed { hash: "abc".into() },
+        Msg::SnapshotMissing { hash: "abc".into() },
+        Msg::SnapshotStoreFailed {
+            reason: "disk full".into(),
+        },
         Msg::StoreDataDirectoryUnavailable,
         Msg::StoreWriteFailed {
             path: "/s/x".into(),
@@ -195,7 +200,7 @@ fn every_language_renders_every_message() {
     // omission.
     assert_eq!(
         samples.len(),
-        66,
+        69,
         "add the new Msg variant to this list, then update the count"
     );
 

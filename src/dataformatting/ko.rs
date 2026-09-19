@@ -98,6 +98,16 @@ pub(super) fn render(msg: &Msg) -> String {
             "아직 아무것도 바꿀 수 없습니다. 허용할 경로를 {policy} 에 적은 뒤 \
              `safescope policy approve` 를 실행하세요."
         ),
+        Msg::SnapshotVerificationFailed { hash } => format!(
+            "{hash} 의 복구 자료를 다시 해시한 값이 저장한 값과 다릅니다. 아무것도 바꾸지 \
+             않았습니다. 다시 읽어서 맞는 복구 자료가 없으면 변경을 되돌릴 수 없습니다."
+        ),
+        Msg::SnapshotMissing { hash } => {
+            format!("{hash} 의 복구 자료가 저장소에 없습니다.")
+        }
+        Msg::SnapshotStoreFailed { reason } => {
+            format!("복구 자료를 저장하지 못했습니다: {reason}. 원본은 그대로 두었습니다.")
+        }
         Msg::StoreDataDirectoryUnavailable => "엔진 상태를 둘 디렉터리를 찾을 수 없습니다. \
 SAFESCOPE_DATA_DIR 로 지정하세요."
             .to_owned(),

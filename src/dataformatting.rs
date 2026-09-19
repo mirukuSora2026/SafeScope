@@ -249,6 +249,17 @@ pub enum Msg {
         policy: String,
     },
 
+    // ── Recovery data ──────────────────────────────────────────────────
+    SnapshotVerificationFailed {
+        hash: String,
+    },
+    SnapshotMissing {
+        hash: String,
+    },
+    SnapshotStoreFailed {
+        reason: String,
+    },
+
     // ── Engine state store ─────────────────────────────────────────────
     StoreDataDirectoryUnavailable,
     StoreWriteFailed {

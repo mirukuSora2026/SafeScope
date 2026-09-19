@@ -10,6 +10,7 @@
 //! and believe it.
 
 pub mod policy_store;
+pub mod snapshot;
 
 use std::fs;
 use std::io::Write as _;

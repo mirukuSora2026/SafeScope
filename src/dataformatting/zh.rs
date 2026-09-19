@@ -93,6 +93,16 @@ pub(super) fn render(msg: &Msg) -> String {
                 "目前还不能更改任何内容。请在 {policy} 中填写要允许的路径，然后运行 `safescope policy approve`。"
             )
         }
+        Msg::SnapshotVerificationFailed { hash } => format!(
+            "{hash} 的恢复数据重新计算的哈希与所存的不一致。未做任何更改：\
+             没有能正确读回的快照，这次更改将无法撤销。"
+        ),
+        Msg::SnapshotMissing { hash } => {
+            format!("存储中没有 {hash} 的恢复数据。")
+        }
+        Msg::SnapshotStoreFailed { reason } => {
+            format!("无法保存恢复数据：{reason}。原文件保持不变。")
+        }
         Msg::StoreDataDirectoryUnavailable => "找不到用于存放引擎状态的目录。\
 请设置 SAFESCOPE_DATA_DIR 指定一个。"
             .to_owned(),

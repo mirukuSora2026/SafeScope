@@ -89,15 +89,16 @@ src/
 ├─ platform.rs         atomic rename, staged writes, durable removal
 ├─ registry.rs         .safescope/ bootstrap and workspace identity
 ├─ store.rs            state layout, atomic writes
-│  └─ policy_store.rs  approved policy versions
+│  ├─ policy_store.rs  approved policy versions
+│  └─ snapshot.rs      content-addressed recovery data (I2)
 └─ cli.rs              init, policy approve/show, check, hook
    ├─ approve.rs
    ├─ check.rs
    └─ hook.rs           the PreToolUse hook
 ```
 
-Modules still to come: `budget`, `planner`, `executor`, `snapshot`, `journal`,
-`recovery`, and the `mcp` adapter.
+Modules still to come: `budget`, `planner`, `executor`, `journal`, `recovery`,
+and the `mcp` adapter.
 
 ## Commands
 

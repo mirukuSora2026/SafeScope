@@ -98,6 +98,17 @@ pub(super) fn render(msg: &Msg) -> String {
             "Пока ничего нельзя изменить. Добавьте разрешаемые пути в {policy}, затем \
              выполните `safescope policy approve`."
         ),
+        Msg::SnapshotVerificationFailed { hash } => format!(
+            "Данные восстановления для {hash} не сходятся по хешу с тем, что было сохранено. \
+             Ничего не изменено: без снимка, который читается обратно верно, изменение \
+             нельзя было бы отменить."
+        ),
+        Msg::SnapshotMissing { hash } => {
+            format!("Данных восстановления для {hash} нет в хранилище.")
+        }
+        Msg::SnapshotStoreFailed { reason } => {
+            format!("Не удалось сохранить данные восстановления: {reason}. Оригинал не тронут.")
+        }
         Msg::StoreDataDirectoryUnavailable => "Не найден каталог для состояния движка. \
 Укажите его через SAFESCOPE_DATA_DIR."
             .to_owned(),

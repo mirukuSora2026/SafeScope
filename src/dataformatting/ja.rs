@@ -104,6 +104,17 @@ pub(super) fn render(msg: &Msg) -> String {
             "まだ何も変更できません。許可したいパスを {policy} に書いてから \
              `safescope policy approve` を実行してください。"
         ),
+        Msg::SnapshotVerificationFailed { hash } => format!(
+            "{hash} の復旧データを再ハッシュした値が保存した値と一致しません。\
+             何も変更していません。正しく読み戻せる復旧データがなければ、\
+             その変更は元に戻せないからです。"
+        ),
+        Msg::SnapshotMissing { hash } => {
+            format!("{hash} の復旧データがストアにありません。")
+        }
+        Msg::SnapshotStoreFailed { reason } => {
+            format!("復旧データを保存できませんでした: {reason}。原本はそのままです。")
+        }
         Msg::StoreDataDirectoryUnavailable => "エンジン状態を置くディレクトリが見つかりません。\
 SAFESCOPE_DATA_DIR で指定してください。"
             .to_owned(),

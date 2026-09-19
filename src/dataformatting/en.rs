@@ -98,6 +98,17 @@ pub(super) fn render(msg: &Msg) -> String {
             "Nothing can be changed yet. Add the paths you want to allow to {policy}, then run \
              `safescope policy approve`."
         ),
+        Msg::SnapshotVerificationFailed { hash } => format!(
+            "The recovery data for {hash} does not hash back to what was stored. Nothing was \
+             changed: without a snapshot that reads back correctly, the change could not be \
+             undone."
+        ),
+        Msg::SnapshotMissing { hash } => {
+            format!("The recovery data for {hash} is not in the store.")
+        }
+        Msg::SnapshotStoreFailed { reason } => {
+            format!("Recovery data could not be stored: {reason}. The original was left untouched.")
+        }
         Msg::StoreDataDirectoryUnavailable => "No directory is available for engine state. \
 Set SAFESCOPE_DATA_DIR to choose one."
             .to_owned(),
