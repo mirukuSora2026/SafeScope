@@ -35,6 +35,7 @@ pub mod paths;
 pub mod planner;
 pub mod platform;
 pub mod policy;
+pub mod recovery;
 pub mod registry;
 pub mod store;
 

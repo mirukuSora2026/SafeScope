@@ -87,6 +87,8 @@ src/
 │  └─ evaluate.rs      protected → deny → allow → grant → not covered
 ├─ planner.rs          request → checked plan; stages payload, takes snapshot
 ├─ executor.rs         applies a plan in the order the invariants require
+├─ budget.rs           how much a task may change (I5)
+├─ recovery.rs         what happened when the engine stopped mid-operation
 ├─ journal.rs          the record of what was done and attempted (I1)
 │  └─ record.rs        Stage, OperationRecord
 ├─ path_guard.rs       Workspace, Resolved — filesystem resolution (I4)
@@ -101,7 +103,7 @@ src/
    └─ hook.rs           the PreToolUse hook
 ```
 
-Modules still to come: `budget`, `recovery`, and the `mcp` adapter.
+Modules still to come: the workspace lock, undo, and the `mcp` adapter.
 
 ## Commands
 
@@ -111,5 +113,12 @@ cargo clippy --all-targets -- -D warnings
 cargo build --features fault-injection
 ```
 
-Crash-recovery tests run a child process with `SAFESCOPE_FAULT=<point>` under the
-`fault-injection` feature and then assert on what recovery concludes.
+Crash-recovery tests spawn `sfs-crash-harness` with `SAFESCOPE_FAULT=<point>`
+under the `fault-injection` feature, abort it mid-operation, and then assert on
+what recovery concludes. The harness binary is `required-features` gated, so it
+never ships.
+
+Tests that set `SAFESCOPE_DATA_DIR` must hold a lock while they set *and* use it.
+It is process-wide and the suite runs in parallel, so without one a test reads
+another's state directory — and only sometimes, which is the worst way for a test
+to be wrong.

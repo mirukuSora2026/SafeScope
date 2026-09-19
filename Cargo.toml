@@ -3,6 +3,17 @@ name = "safescope"
 version = "0.1.0"
 edition = "2024"
 
+[[bin]]
+name = "safescope"
+path = "src/main.rs"
+
+# Built only with the fault-injection feature, so it never ships. Crash recovery
+# cannot be tested from inside a process; this one can be killed part-way.
+[[bin]]
+name = "sfs-crash-harness"
+path = "src/bin/crash_harness.rs"
+required-features = ["fault-injection"]
+
 [features]
 default = []
 fault-injection = []
