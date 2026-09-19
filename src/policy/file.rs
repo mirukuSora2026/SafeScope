@@ -109,9 +109,13 @@ pub struct ScopeSection {
     /// Refusals. These carry no operation set: a deny is total.
     #[serde(default)]
     pub deny: Vec<Spanned<String>>,
-    /// Operations the shorthand form grants. Empty means "every operation".
+    /// Operations the shorthand form grants.
+    ///
+    /// Absent means "every operation". An explicitly empty list is a different
+    /// thing — a policy that grants nothing — and validation rejects it, so the
+    /// two cases must stay distinguishable.
     #[serde(default)]
-    pub default_ops: Vec<Operation>,
+    pub default_ops: Option<Vec<Operation>>,
     /// Long form, for rules that need their own operation set.
     #[serde(default)]
     pub allow_rule: Vec<AllowRule>,
@@ -386,7 +390,10 @@ default_ops = [\"create\", \"replace\"]
         let scope = &document.file().scope;
         assert_eq!(scope.allow.len(), 2);
         assert_eq!(scope.deny.len(), 1);
-        assert_eq!(scope.default_ops, [Operation::Create, Operation::Replace]);
+        assert_eq!(
+            scope.default_ops.as_deref(),
+            Some(&[Operation::Create, Operation::Replace][..])
+        );
     }
 
     #[test]

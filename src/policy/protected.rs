@@ -149,7 +149,7 @@ impl Default for ProtectedPaths {
 /// reporting a conflict: it checks whether either pattern's fixed leading
 /// components are a prefix of the other's. That catches `allow = [".git/**"]`
 /// against `.git/**`, which is what this is for.
-fn patterns_overlap(left: &str, right: &str) -> bool {
+pub(super) fn patterns_overlap(left: &str, right: &str) -> bool {
     let left_fixed = fixed_prefix(left);
     let right_fixed = fixed_prefix(right);
     if left_fixed.is_empty() || right_fixed.is_empty() {

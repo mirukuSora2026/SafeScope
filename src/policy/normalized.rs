@@ -96,14 +96,13 @@ impl NormalizedPolicy {
         let file = document.file();
         let scope = &file.scope;
 
-        // An omitted default_ops means every operation, not none. A policy that
-        // lists paths but no operations almost certainly meant "all of them",
-        // and an explicitly empty list is caught by validation.
-        let default_ops = if scope.default_ops.is_empty() {
-            OpSet::all()
-        } else {
-            scope.default_ops.iter().copied().collect()
-        };
+        // An omitted default_ops means every operation. An explicitly empty one
+        // stays empty so validation can reject it rather than silently widening
+        // it into the opposite of what was written.
+        let default_ops = scope
+            .default_ops
+            .as_ref()
+            .map_or(OpSet::all(), |ops| ops.iter().copied().collect());
 
         let mut allow: Vec<AllowEntry> = scope
             .allow
