@@ -9,8 +9,8 @@
 //! policy or journal record is worse than none, because the engine would read it
 //! and believe it.
 
+pub mod content;
 pub mod policy_store;
-pub mod snapshot;
 
 use std::fs;
 use std::io::Write as _;

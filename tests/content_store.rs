@@ -1,15 +1,15 @@
-//! Recovery data.
+//! Content-addressed storage.
 //!
-//! The property worth testing here is not that a write happened but that what
-//! comes back is what went in, and that a snapshot which has since been damaged
-//! is reported rather than handed out as if it were good.
+//! The property worth testing is not that a write happened but that what comes
+//! back is what went in, and that a blob which has since been damaged is
+//! reported rather than handed out as if it were good.
 
 use std::fs;
 
 use safescope::error::ErrorCode;
 use safescope::hash::ContentHash;
 use safescope::ids::WorkspaceId;
-use safescope::store::snapshot::SnapshotStore;
+use safescope::store::content::ContentStore;
 use safescope::store::{DATA_DIR_ENV, StatePaths};
 use tempfile::TempDir;
 
@@ -18,13 +18,13 @@ fn env_lock() -> std::sync::MutexGuard<'static, ()> {
     LOCK.lock().unwrap_or_else(|poisoned| poisoned.into_inner())
 }
 
-fn store() -> (TempDir, TempDir, SnapshotStore) {
+fn store() -> (TempDir, TempDir, ContentStore) {
     let data = TempDir::new().expect("data");
     let workspace = TempDir::new().expect("workspace");
     unsafe { std::env::set_var(DATA_DIR_ENV, data.path()) };
     let paths = StatePaths::for_workspace(WorkspaceId::new(), workspace.path()).expect("paths");
     paths.create().expect("create");
-    let store = SnapshotStore::new(&paths);
+    let store = ContentStore::snapshots(&paths);
     (data, workspace, store)
 }
 
@@ -171,4 +171,28 @@ fn storing_leaves_no_temporary_behind() {
         .filter(|name| name.starts_with(".sfs-tmp-"))
         .collect();
     assert!(leftovers.is_empty(), "left behind: {leftovers:?}");
+}
+
+#[test]
+fn the_two_stores_are_separate() {
+    // Snapshots and staged payloads are kept for different lengths of time: a
+    // payload stops mattering once its plan is applied or abandoned, while a
+    // snapshot has to outlive the operation it undoes.
+    let _guard = env_lock();
+    let data = TempDir::new().expect("data");
+    let workspace = TempDir::new().expect("workspace");
+    unsafe { std::env::set_var(DATA_DIR_ENV, data.path()) };
+    let paths = StatePaths::for_workspace(WorkspaceId::new(), workspace.path()).expect("paths");
+    paths.create().expect("create");
+
+    let snapshots = ContentStore::snapshots(&paths);
+    let staging = ContentStore::staging(&paths);
+    assert_ne!(snapshots.directory(), staging.directory());
+
+    let hash = staging.store(b"pending contents").expect("stage");
+    assert!(staging.verify(hash).expect("verify"));
+    assert!(
+        !snapshots.contains(hash),
+        "staging a payload stores no snapshot"
+    );
 }

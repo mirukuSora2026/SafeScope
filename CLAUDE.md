@@ -91,8 +91,8 @@ src/
 ├─ platform.rs         atomic rename, staged writes, durable removal
 ├─ registry.rs         .safescope/ bootstrap and workspace identity
 ├─ store.rs            state layout, atomic writes
-│  ├─ policy_store.rs  approved policy versions
-│  └─ snapshot.rs      content-addressed recovery data (I2)
+│  ├─ content.rs       content-addressed blobs: snapshots (I2) and payloads
+│  └─ policy_store.rs  approved policy versions
 └─ cli.rs              init, policy approve/show, check, hook
    ├─ approve.rs
    ├─ check.rs

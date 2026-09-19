@@ -1,6 +1,19 @@
-//! Recovery data, addressed by content.
+//! Content-addressed blob storage.
 //!
-//! This is the store that makes undo possible, so it upholds invariant I2:
+//! Two stores use it, for the same reason: both hold bytes the engine must be
+//! able to produce again exactly.
+//!
+//! - `snapshots/` holds what a file contained before a destructive change, which
+//!   is what undo restores.
+//! - `staging/` holds the new contents a plan will write, fixed at planning time
+//!   so `apply` takes nothing but a plan id and so recovery knows the *after*
+//!   hash in advance.
+//!
+//! They are separate directories rather than one, because they are kept for
+//! different lengths of time: a staged payload stops mattering once its plan is
+//! applied or abandoned, while a snapshot has to outlive the operation it undoes.
+//!
+//! Through the snapshot store this upholds invariant I2:
 //! **recovery data is stored and verified before a destructive change**. Storing
 //! is not enough on its own — a write that returned success and a file that
 //! reads back correctly are different claims, and the second is the one undo
@@ -24,17 +37,30 @@ use crate::hash::ContentHash;
 
 use super::{StatePaths, read_failed, write_atomically};
 
-/// The content-addressed store under `snapshots/`.
+/// A content-addressed store rooted at one directory.
 #[derive(Debug, Clone)]
-pub struct SnapshotStore {
+pub struct ContentStore {
     directory: PathBuf,
 }
 
-impl SnapshotStore {
-    pub fn new(paths: &StatePaths) -> Self {
+impl ContentStore {
+    /// What a file contained before a destructive change.
+    pub fn snapshots(paths: &StatePaths) -> Self {
         Self {
             directory: paths.snapshots(),
         }
+    }
+
+    /// What a plan will write, held between planning and applying.
+    pub fn staging(paths: &StatePaths) -> Self {
+        Self {
+            directory: paths.staging(),
+        }
+    }
+
+    /// A store at an explicit directory.
+    pub fn at(directory: PathBuf) -> Self {
+        Self { directory }
     }
 
     /// Stores contents and returns the hash they are filed under.
@@ -138,7 +164,7 @@ impl SnapshotStore {
         &self.directory
     }
 
-    /// `snapshots/<shard>/<hex>`, sharded so one directory does not accumulate
+    /// `<root>/<shard>/<hex>`, sharded so one directory does not accumulate
     /// tens of thousands of entries.
     fn path_of(&self, hash: ContentHash) -> PathBuf {
         self.directory.join(hash.shard()).join(hash.to_hex())
