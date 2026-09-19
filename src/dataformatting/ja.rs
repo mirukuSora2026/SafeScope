@@ -104,6 +104,27 @@ pub(super) fn render(msg: &Msg) -> String {
             "まだ何も変更できません。許可したいパスを {policy} に書いてから \
              `safescope policy approve` を実行してください。"
         ),
+        Msg::BudgetPathsExceeded {
+            used,
+            limit,
+            adding,
+        } => format!(
+            "このタスクは許可された {limit} 個のパスのうちすでに {used} 個を変更しており、\
+             {adding} はさらにもう一つになります。何もしていません。"
+        ),
+        Msg::BudgetOperationsExceeded { used, limit } => {
+            format!("このタスクは許可された {limit} 回のうち {used} 回を使いました。")
+        }
+        Msg::BudgetMovesExceeded { used, limit } => {
+            format!("このタスクは許可された移動 {limit} 回のうち {used} 回を使いました。")
+        }
+        Msg::BudgetStorageExceeded { used, limit } => format!(
+            "このワークスペースの復旧データは上限 {limit} に対して {used} です。\
+             この変更が失わせる内容を保管できません。"
+        ),
+        Msg::HintRequestBudgetExpansion => "これまでの変更を確認してください。\
+本当に必要であれば、やり直すのではなく上限の引き上げを要求してください。"
+            .to_owned(),
         Msg::PlanTargetExists { path } => format!(
             "{path} はすでに存在するため作成できません。置換は別の操作であり、\
              置換は以前の内容を先に保存します。"

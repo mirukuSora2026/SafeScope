@@ -69,6 +69,15 @@ impl Stage {
         )
     }
 
+    /// Whether this operation is held against the budget.
+    ///
+    /// Anything that might have happened counts. Only a stage where the engine
+    /// has confirmed nothing ran gives its share back — being generous here
+    /// would let a task exceed its limit by crashing at the right moment.
+    pub const fn holds_budget(self) -> bool {
+        !matches!(self, Stage::Aborted | Stage::Rejected)
+    }
+
     /// Whether this operation needs looking at before the workspace is usable.
     pub const fn needs_attention(self) -> bool {
         matches!(self, Stage::Conflict | Stage::RecoveryRequired)
@@ -206,6 +215,19 @@ mod tests {
         assert!(!Stage::Prepared.is_settled());
         assert!(Stage::Committed.is_settled());
         assert!(Stage::Aborted.is_settled());
+    }
+
+    #[test]
+    fn only_a_confirmed_non_event_releases_budget() {
+        // A crash must not be a way to spend less than was used.
+        assert!(Stage::Prepared.holds_budget());
+        assert!(Stage::Applying.holds_budget());
+        assert!(Stage::Committed.holds_budget());
+        assert!(Stage::Conflict.holds_budget());
+        assert!(Stage::RecoveryRequired.holds_budget());
+
+        assert!(!Stage::Aborted.holds_budget());
+        assert!(!Stage::Rejected.holds_budget());
     }
 
     #[test]

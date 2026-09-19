@@ -123,6 +123,26 @@ pub enum Msg {
         policy: String,
     },
 
+    // ── Budget ─────────────────────────────────────────────────────────
+    BudgetPathsExceeded {
+        used: u64,
+        limit: u64,
+        adding: String,
+    },
+    BudgetOperationsExceeded {
+        used: u64,
+        limit: u64,
+    },
+    BudgetMovesExceeded {
+        used: u64,
+        limit: u64,
+    },
+    BudgetStorageExceeded {
+        used: String,
+        limit: String,
+    },
+    HintRequestBudgetExpansion,
+
     // ── Planning ───────────────────────────────────────────────────────
     PlanTargetExists {
         path: String,

@@ -98,6 +98,27 @@ pub(super) fn render(msg: &Msg) -> String {
             "Пока ничего нельзя изменить. Добавьте разрешаемые пути в {policy}, затем \
              выполните `safescope policy approve`."
         ),
+        Msg::BudgetPathsExceeded {
+            used,
+            limit,
+            adding,
+        } => format!(
+            "Эта задача уже изменила {used} из {limit} разрешённых путей, а {adding} стал бы \
+             ещё одним. Ничего не сделано."
+        ),
+        Msg::BudgetOperationsExceeded { used, limit } => {
+            format!("Эта задача использовала {used} из {limit} разрешённых операций.")
+        }
+        Msg::BudgetMovesExceeded { used, limit } => {
+            format!("Эта задача использовала {used} из {limit} разрешённых перемещений.")
+        }
+        Msg::BudgetStorageExceeded { used, limit } => format!(
+            "Данные восстановления этого рабочего пространства занимают {used} при пределе \
+             {limit}, поэтому содержимое, которое уничтожит это изменение, негде сохранить."
+        ),
+        Msg::HintRequestBudgetExpansion => "Просмотрите уже сделанные изменения. Если работе \
+действительно нужно больше, попросите поднять предел, а не повторяйте попытку."
+            .to_owned(),
         Msg::PlanTargetExists { path } => format!(
             "{path} уже существует, поэтому его нельзя создать. Замена — другая операция, \
              и она сначала сохраняет прежнее содержимое."

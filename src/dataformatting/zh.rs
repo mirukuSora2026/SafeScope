@@ -93,6 +93,26 @@ pub(super) fn render(msg: &Msg) -> String {
                 "目前还不能更改任何内容。请在 {policy} 中填写要允许的路径，然后运行 `safescope policy approve`。"
             )
         }
+        Msg::BudgetPathsExceeded {
+            used,
+            limit,
+            adding,
+        } => format!(
+            "此任务已更改 {limit} 个允许路径中的 {used} 个，而 {adding} 将是又一个。\
+             未做任何更改。"
+        ),
+        Msg::BudgetOperationsExceeded { used, limit } => {
+            format!("此任务已使用 {limit} 次允许操作中的 {used} 次。")
+        }
+        Msg::BudgetMovesExceeded { used, limit } => {
+            format!("此任务已使用 {limit} 次允许移动中的 {used} 次。")
+        }
+        Msg::BudgetStorageExceeded { used, limit } => {
+            format!("此工作区的恢复数据为 {used}，上限为 {limit}，无法保存本次更改将销毁的内容。")
+        }
+        Msg::HintRequestBudgetExpansion => "请检查目前已更改的内容。\
+如果确实需要更多，请申请提高上限，而不是重试。"
+            .to_owned(),
         Msg::PlanTargetExists { path } => {
             format!("{path} 已存在，无法创建。替换是另一种操作，且会先保存原有内容。")
         }

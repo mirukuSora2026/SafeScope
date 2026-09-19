@@ -80,6 +80,21 @@ fn every_language_renders_every_message() {
         Msg::HintFillInAllowThenApprove {
             policy: ".safescope/policy.toml".into(),
         },
+        Msg::BudgetPathsExceeded {
+            used: 8,
+            limit: 8,
+            adding: "src/a.rs".into(),
+        },
+        Msg::BudgetOperationsExceeded {
+            used: 20,
+            limit: 20,
+        },
+        Msg::BudgetMovesExceeded { used: 3, limit: 3 },
+        Msg::BudgetStorageExceeded {
+            used: "128 MiB".into(),
+            limit: "128 MiB".into(),
+        },
+        Msg::HintRequestBudgetExpansion,
         Msg::PlanTargetExists {
             path: "a.rs".into(),
         },
@@ -231,7 +246,7 @@ fn every_language_renders_every_message() {
     // omission.
     assert_eq!(
         samples.len(),
-        79,
+        84,
         "add the new Msg variant to this list, then update the count"
     );
 

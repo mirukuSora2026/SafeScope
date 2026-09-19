@@ -49,6 +49,11 @@ pub struct Harness {
 
 impl Harness {
     pub fn new() -> Self {
+        Self::with_policy(POLICY)
+    }
+
+    /// A workspace governed by a policy the test chooses, for exercising limits.
+    pub fn with_policy(policy: &str) -> Self {
         let data = TempDir::new().expect("data");
         let root = TempDir::new().expect("workspace");
         unsafe { std::env::set_var(DATA_DIR_ENV, data.path()) };
@@ -60,7 +65,7 @@ impl Harness {
 
         Self {
             workspace: Workspace::open(root.path()).expect("open workspace"),
-            policy: CompiledPolicy::compile(NormalizedPolicy::from_text(POLICY).unwrap())
+            policy: CompiledPolicy::compile(NormalizedPolicy::from_text(policy).unwrap())
                 .expect("compile"),
             snapshots: ContentStore::snapshots(&paths),
             staging: ContentStore::staging(&paths),
@@ -84,6 +89,7 @@ impl Harness {
         Planner {
             workspace: &self.workspace,
             policy: &self.policy,
+            journal: &self.journal,
             snapshots: &self.snapshots,
             staging: &self.staging,
         }
@@ -97,9 +103,11 @@ impl Harness {
     ) -> safescope::error::Result<safescope::journal::OperationRecord> {
         let snapshots = self.snapshots.clone();
         let staging = self.staging.clone();
+        let limits = *self.policy.budget();
         Executor {
             workspace: &self.workspace,
             journal: &mut self.journal,
+            limits: &limits,
             snapshots: &snapshots,
             staging: &staging,
         }

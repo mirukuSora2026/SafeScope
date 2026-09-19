@@ -20,6 +20,7 @@
 //! | I5 | Budget is reserved before execution and released only if nothing ran |
 //! | I6 | AI input can never serve as evidence of approval |
 
+pub mod budget;
 pub mod cli;
 pub mod dataformatting;
 pub mod domain;

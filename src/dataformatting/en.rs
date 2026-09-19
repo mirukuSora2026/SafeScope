@@ -98,6 +98,27 @@ pub(super) fn render(msg: &Msg) -> String {
             "Nothing can be changed yet. Add the paths you want to allow to {policy}, then run \
              `safescope policy approve`."
         ),
+        Msg::BudgetPathsExceeded {
+            used,
+            limit,
+            adding,
+        } => format!(
+            "This task has already changed {used} of {limit} permitted paths, and {adding} \
+             would be another. Nothing was done."
+        ),
+        Msg::BudgetOperationsExceeded { used, limit } => {
+            format!("This task has used {used} of {limit} permitted operations.")
+        }
+        Msg::BudgetMovesExceeded { used, limit } => {
+            format!("This task has used {used} of {limit} permitted moves.")
+        }
+        Msg::BudgetStorageExceeded { used, limit } => format!(
+            "Recovery data for this workspace is {used} against a {limit} limit, so the \
+             contents this change would destroy could not be kept."
+        ),
+        Msg::HintRequestBudgetExpansion => "Review what has been changed so far. If the work \
+genuinely needs more, ask for the limit to be raised rather than retrying."
+            .to_owned(),
         Msg::PlanTargetExists { path } => format!(
             "{path} already exists, so it cannot be created. Replacing it is a different \
              operation, and one that stores the previous contents first."

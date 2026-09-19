@@ -25,6 +25,7 @@
 
 use std::time::SystemTime;
 
+use crate::budget::Budget;
 use crate::domain::{Operation, PathState, Phase};
 use crate::error::{Error, Result};
 use crate::fault::{self, FaultPoint};
@@ -35,12 +36,14 @@ use crate::path_guard::Workspace;
 use crate::paths::RelPath;
 use crate::planner::ChangePlan;
 use crate::platform;
+use crate::policy::BudgetLimits;
 use crate::store::content::ContentStore;
 
 /// Applies plans to a workspace.
 pub struct Executor<'a> {
     pub workspace: &'a Workspace,
     pub journal: &'a mut Journal,
+    pub limits: &'a BudgetLimits,
     pub snapshots: &'a ContentStore,
     pub staging: &'a ContentStore,
 }
@@ -90,6 +93,18 @@ impl Executor<'_> {
         // I3: the plan describes a particular state of the workspace, and this
         // is the last moment at which that can be confirmed.
         self.require_unchanged(plan)?;
+
+        // I5: checked immediately before the reservation, in the same
+        // single-writer window, so nothing can be spent in between. Undo is
+        // exempt — see OperationKind.
+        if kind.spends_budget() {
+            Budget {
+                limits: self.limits,
+                journal: self.journal,
+                snapshots: self.snapshots,
+            }
+            .check(plan.task, &plan.transition)?;
+        }
 
         // I1: durable before anything is touched.
         let record = self.journal.record_prepared(

@@ -17,11 +17,13 @@
 
 use std::time::{Duration, SystemTime};
 
+use crate::budget::Budget;
 use crate::dataformatting::{self, Msg};
 use crate::domain::{FileState, Operation, Transition};
 use crate::error::{Denial, Error, ErrorCode, Result};
 use crate::hash::ContentHash;
 use crate::ids::{PlanId, TaskId};
+use crate::journal::Journal;
 use crate::path_guard::Workspace;
 use crate::paths::RelPath;
 use crate::policy::{CompiledPolicy, EvaluationContext, PolicyVersion, evaluate, evaluate_move};
@@ -99,6 +101,7 @@ impl ChangePlan {
 pub struct Planner<'a> {
     pub workspace: &'a Workspace,
     pub policy: &'a CompiledPolicy,
+    pub journal: &'a Journal,
     pub snapshots: &'a ContentStore,
     pub staging: &'a ContentStore,
 }
@@ -115,7 +118,21 @@ impl Planner<'_> {
         context: &EvaluationContext<'_>,
     ) -> Result<ChangePlan> {
         self.check_policy(request, context)?;
+
+        // Observation only: nothing is written until the budget has agreed, so a
+        // refusal here leaves no snapshot and no staged payload behind.
         let transition = self.build_transition(request)?;
+
+        Budget {
+            limits: self.policy.budget(),
+            journal: self.journal,
+            snapshots: self.snapshots,
+        }
+        .check(context.task, &transition)?;
+
+        // I2: the previous contents become recoverable while the file is still
+        // intact, not at the moment of overwriting.
+        self.take_snapshot(&transition)?;
 
         // Staged before the plan is handed out, so `apply` needs nothing but an
         // id and recovery knows the resulting hash in advance.
@@ -177,9 +194,6 @@ impl Planner<'_> {
                 let (hash, len) = self.require_present(path)?;
                 self.check_size(path, len)?;
                 self.check_size(path, contents.len() as u64)?;
-                // I2: the previous contents are recoverable before anything is
-                // at risk, not at the moment of overwriting.
-                self.snapshot(path, hash)?;
                 Ok(Transition::replace(
                     path.clone(),
                     (hash, len),
@@ -190,7 +204,6 @@ impl Planner<'_> {
             ChangeRequest::Trash { path } => {
                 let (hash, len) = self.require_present(path)?;
                 self.check_size(path, len)?;
-                self.snapshot(path, hash)?;
                 Ok(Transition::trash(path.clone(), hash, len))
             }
 
@@ -217,6 +230,20 @@ impl Planner<'_> {
                 },
             ))),
         }
+    }
+
+    /// Stores recovery data for whatever this transition will destroy.
+    fn take_snapshot(&self, transition: &Transition) -> Result<()> {
+        if !transition.operation().destroys_content() {
+            // A move preserves its contents; undoing it is the reverse rename.
+            return Ok(());
+        }
+        for state in transition.states(crate::domain::Phase::Before) {
+            if let Some(hash) = state.state.hash() {
+                self.snapshot(&state.path, *hash)?;
+            }
+        }
+        Ok(())
     }
 
     /// Copies the current contents into the snapshot store and verifies them.

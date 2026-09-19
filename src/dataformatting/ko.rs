@@ -98,6 +98,27 @@ pub(super) fn render(msg: &Msg) -> String {
             "아직 아무것도 바꿀 수 없습니다. 허용할 경로를 {policy} 에 적은 뒤 \
              `safescope policy approve` 를 실행하세요."
         ),
+        Msg::BudgetPathsExceeded {
+            used,
+            limit,
+            adding,
+        } => format!(
+            "이 작업은 허용된 {limit} 개 경로 중 이미 {used} 개를 바꿨고, {adding} 은 그 \
+             다음이 됩니다. 아무것도 하지 않았습니다."
+        ),
+        Msg::BudgetOperationsExceeded { used, limit } => {
+            format!("이 작업은 허용된 {limit} 회 중 {used} 회를 썼습니다.")
+        }
+        Msg::BudgetMovesExceeded { used, limit } => {
+            format!("이 작업은 허용된 이동 {limit} 회 중 {used} 회를 썼습니다.")
+        }
+        Msg::BudgetStorageExceeded { used, limit } => format!(
+            "이 작업 공간의 복구 자료가 한계 {limit} 에 대해 {used} 입니다. 이 변경이 \
+             없앨 내용을 보관할 수 없습니다."
+        ),
+        Msg::HintRequestBudgetExpansion => "지금까지 바꾼 것을 검토하세요. 정말 더 필요하면 \
+다시 시도하지 말고 한도 확장을 요청하세요."
+            .to_owned(),
         Msg::PlanTargetExists { path } => format!(
             "{path} 이 이미 있어서 생성할 수 없습니다. 교체는 다른 연산이고, 교체는 이전 \
              내용을 먼저 저장합니다."
