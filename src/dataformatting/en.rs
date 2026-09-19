@@ -98,6 +98,24 @@ pub(super) fn render(msg: &Msg) -> String {
             "Nothing can be changed yet. Add the paths you want to allow to {policy}, then run \
              `safescope policy approve`."
         ),
+        Msg::PlanTargetExists { path } => format!(
+            "{path} already exists, so it cannot be created. Replacing it is a different \
+             operation, and one that stores the previous contents first."
+        ),
+        Msg::PlanTargetMissing { path } => {
+            format!("{path} does not exist, so this operation has nothing to act on.")
+        }
+        Msg::PlanFileTooLarge { path, size, limit } => {
+            format!("{path} is {size}, over the {limit} this policy permits.")
+        }
+        Msg::PlanHasExpired { plan } => {
+            format!("Plan {plan} has expired and will not be applied.")
+        }
+        Msg::PlanStateChanged { path } => format!(
+            "{path} has changed since this was planned. Nothing was done: applying a plan \
+             built against different contents would overwrite whatever arrived in between."
+        ),
+        Msg::HintRebuildThePlan => "Build the plan again against the current contents.".to_owned(),
         Msg::JournalOpenFailed { path, reason } => {
             format!("The journal at {path} could not be opened: {reason}")
         }

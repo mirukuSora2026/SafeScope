@@ -98,6 +98,24 @@ pub(super) fn render(msg: &Msg) -> String {
             "아직 아무것도 바꿀 수 없습니다. 허용할 경로를 {policy} 에 적은 뒤 \
              `safescope policy approve` 를 실행하세요."
         ),
+        Msg::PlanTargetExists { path } => format!(
+            "{path} 이 이미 있어서 생성할 수 없습니다. 교체는 다른 연산이고, 교체는 이전 \
+             내용을 먼저 저장합니다."
+        ),
+        Msg::PlanTargetMissing { path } => {
+            format!("{path} 이 없어서 이 연산이 대상으로 삼을 것이 없습니다.")
+        }
+        Msg::PlanFileTooLarge { path, size, limit } => {
+            format!("{path} 은 {size} 로, 이 정책이 허용하는 {limit} 를 넘습니다.")
+        }
+        Msg::PlanHasExpired { plan } => {
+            format!("계획 {plan} 의 유효기간이 지나 실행하지 않습니다.")
+        }
+        Msg::PlanStateChanged { path } => format!(
+            "{path} 이 계획을 세운 뒤 바뀌었습니다. 아무것도 하지 않았습니다. 다른 내용을 \
+             기준으로 만든 계획을 적용하면 그 사이에 들어온 변경을 덮어씁니다."
+        ),
+        Msg::HintRebuildThePlan => "지금 내용을 기준으로 계획을 다시 만드세요.".to_owned(),
         Msg::JournalOpenFailed { path, reason } => {
             format!("{path} 의 작업 기록을 열지 못했습니다: {reason}")
         }

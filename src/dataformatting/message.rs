@@ -123,6 +123,26 @@ pub enum Msg {
         policy: String,
     },
 
+    // ── Planning ───────────────────────────────────────────────────────
+    PlanTargetExists {
+        path: String,
+    },
+    PlanTargetMissing {
+        path: String,
+    },
+    PlanFileTooLarge {
+        path: String,
+        size: String,
+        limit: String,
+    },
+    PlanHasExpired {
+        plan: String,
+    },
+    PlanStateChanged {
+        path: String,
+    },
+    HintRebuildThePlan,
+
     // ── Journal ────────────────────────────────────────────────────────
     JournalOpenFailed {
         path: String,

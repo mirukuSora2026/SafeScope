@@ -85,6 +85,8 @@ src/
 │  ├─ protected.rs     paths no rule can unlock
 │  ├─ grant.rs         temporary approvals
 │  └─ evaluate.rs      protected → deny → allow → grant → not covered
+├─ planner.rs          request → checked plan; stages payload, takes snapshot
+├─ executor.rs         applies a plan in the order the invariants require
 ├─ journal.rs          the record of what was done and attempted (I1)
 │  └─ record.rs        Stage, OperationRecord
 ├─ path_guard.rs       Workspace, Resolved — filesystem resolution (I4)
@@ -99,8 +101,7 @@ src/
    └─ hook.rs           the PreToolUse hook
 ```
 
-Modules still to come: `budget`, `planner`, `executor`, `recovery`, and the
-`mcp` adapter.
+Modules still to come: `budget`, `recovery`, and the `mcp` adapter.
 
 ## Commands
 

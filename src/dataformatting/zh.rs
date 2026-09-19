@@ -93,6 +93,23 @@ pub(super) fn render(msg: &Msg) -> String {
                 "目前还不能更改任何内容。请在 {policy} 中填写要允许的路径，然后运行 `safescope policy approve`。"
             )
         }
+        Msg::PlanTargetExists { path } => {
+            format!("{path} 已存在，无法创建。替换是另一种操作，且会先保存原有内容。")
+        }
+        Msg::PlanTargetMissing { path } => {
+            format!("{path} 不存在，此操作没有可作用的对象。")
+        }
+        Msg::PlanFileTooLarge { path, size, limit } => {
+            format!("{path} 为 {size}，超过此策略允许的 {limit}。")
+        }
+        Msg::PlanHasExpired { plan } => {
+            format!("计划 {plan} 已过期，不会执行。")
+        }
+        Msg::PlanStateChanged { path } => format!(
+            "{path} 在制定计划之后发生了变化。未做任何更改：\
+             应用基于不同内容制定的计划会覆盖这期间写入的内容。"
+        ),
+        Msg::HintRebuildThePlan => "请基于当前内容重新制定计划。".to_owned(),
         Msg::JournalOpenFailed { path, reason } => {
             format!("无法打开位于 {path} 的作业记录：{reason}")
         }

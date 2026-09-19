@@ -80,6 +80,24 @@ fn every_language_renders_every_message() {
         Msg::HintFillInAllowThenApprove {
             policy: ".safescope/policy.toml".into(),
         },
+        Msg::PlanTargetExists {
+            path: "a.rs".into(),
+        },
+        Msg::PlanTargetMissing {
+            path: "a.rs".into(),
+        },
+        Msg::PlanFileTooLarge {
+            path: "a.rs".into(),
+            size: "9 MiB".into(),
+            limit: "8 MiB".into(),
+        },
+        Msg::PlanHasExpired {
+            plan: "plan_1".into(),
+        },
+        Msg::PlanStateChanged {
+            path: "a.rs".into(),
+        },
+        Msg::HintRebuildThePlan,
         Msg::JournalOpenFailed {
             path: "/s/j".into(),
             reason: "locked".into(),
@@ -213,7 +231,7 @@ fn every_language_renders_every_message() {
     // omission.
     assert_eq!(
         samples.len(),
-        73,
+        79,
         "add the new Msg variant to this list, then update the count"
     );
 

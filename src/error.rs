@@ -58,6 +58,10 @@ pub enum ErrorCode {
     SourceChanged,
     /// A file already exists at the move destination. It is not overwritten.
     DestinationExists,
+    /// The file an operation needs is not there.
+    TargetMissing,
+    /// A file is larger than the policy permits the engine to handle.
+    FileTooLarge,
     /// Undo conflicts with a change made after the operation.
     RecoveryConflict,
     /// The outcome of an operation cannot be determined without comparing state.
@@ -119,6 +123,8 @@ impl ErrorCode {
             BudgetExceeded => "BUDGET_EXCEEDED",
             SourceChanged => "SOURCE_CHANGED",
             DestinationExists => "DESTINATION_EXISTS",
+            TargetMissing => "TARGET_MISSING",
+            FileTooLarge => "FILE_TOO_LARGE",
             RecoveryConflict => "RECOVERY_CONFLICT",
             StateUncertain => "STATE_UNCERTAIN",
             NoApprovedPolicy => "NO_APPROVED_POLICY",
@@ -154,6 +160,8 @@ impl ErrorCode {
             | BudgetExceeded
             | SourceChanged
             | DestinationExists
+            | TargetMissing
+            | FileTooLarge
             | RecoveryConflict
             | NoApprovedPolicy
             | PolicyChanged
