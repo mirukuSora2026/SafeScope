@@ -299,4 +299,17 @@ fn the_readme_does_not_promise_a_sandbox() {
         readme.contains("Bash"),
         "the gap Bash leaves has to be named"
     );
+
+    // Real agent sessions wrote files through Bash when Write and Edit were
+    // denied, and through Monitor when Bash was denied too. An earlier version
+    // of this document called the second configuration "a complete record",
+    // which was not true. It must not say so again.
+    assert!(
+        readme.contains("no configuration that guarantees a complete record"),
+        "the README must not promise a configuration that closes the gap"
+    );
+    assert!(
+        readme.contains("Monitor"),
+        "the tool that got past a Bash deny has to be named"
+    );
 }

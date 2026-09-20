@@ -31,8 +31,8 @@ Nothing may be changed until that last step is done by a person.
 
 Installed as it is, SafeScope records what goes through it and declines what
 falls outside the policy — but nothing stops Claude writing the same files
-directly. To close most of that gap, deny the built-in edit tools in the
-project's `.claude/settings.json`:
+another way. Denying the built-in edit tools in the project's
+`.claude/settings.json` narrows that:
 
 ```json
 {
@@ -42,23 +42,34 @@ project's `.claude/settings.json`:
 }
 ```
 
-With those denied, a file change has to go through SafeScope's tools, and the
-record is complete for every change that happens.
+### What this still does not buy
 
-### The part this does not close
+**There is no configuration that guarantees a complete record.** This was
+measured, not assumed, by running real agent sessions against these projects:
 
-`Bash` remains. `sed -i`, a redirect and a script all write files, and none of
-them can be read reliably enough to judge. SafeScope does not try: a check that
-looked like protection without being it would be worse than none.
+- With `Write` and `Edit` denied, the agent wrote the files through `Bash`
+  instead — `python3 -c "open(...).write(...)"`, `cat >`, `sed -i`. Two runs out
+  of two. Nothing was recorded.
+- With `Bash` denied as well, it wrote them through `Monitor`, which also runs
+  shell commands, after first trying to spawn a subagent that would have had its
+  own tools. One run out of one. Nothing was recorded.
 
-Two honest options:
+Denying one way of running a command moves the work to another. The set of tools
+that can run one depends on the host and the session, so no list of denials is
+ever known to be complete. Anyone offering you one is describing a sandbox.
 
-- Leave `Bash` allowed and accept that changes made through it are unrecorded.
-  `get_status` reports this rather than implying coverage it does not have.
-- Deny `Bash` too, and accept that tests and builds then have to be run by hand.
+### What SafeScope is for
 
-There is no configuration that gives you both. Anyone who tells you otherwise is
-describing a sandbox, which this is not.
+An audited path, and a policy check before a change is made:
+
+- A change made **through** SafeScope is checked against the approved scope and
+  budget, has its previous contents stored, and can be undone.
+- A change made **around** it is not recorded — and `get_status` says so rather
+  than implying coverage it does not have.
+
+That is worth having when you want a reviewable record of what an agent changed
+and a way back. It is not worth relying on as a boundary, and this document will
+not pretend otherwise.
 
 ## Layout
 
