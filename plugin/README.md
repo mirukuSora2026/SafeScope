@@ -59,6 +59,33 @@ Denying one way of running a command moves the work to another. The set of tools
 that can run one depends on the host and the session, so no list of denials is
 ever known to be complete. Anyone offering you one is describing a sandbox.
 
+### Refusing by list instead, and noticing when that fails
+
+Two things follow from the above, and neither is sufficient alone.
+
+**`[enforcement] mode = "allowlist"`** inverts the question. Rather than naming
+the tools to refuse, it names the ones to permit — reading, searching, and
+SafeScope's own tools — and refuses everything else, including tools this build
+has never heard of. That removes the gap a deny list has, at a price worth
+stating plainly: the agent cannot run a shell command at all, so it cannot run
+your tests either. The default is still `audit`, which judges the tools that
+carry a path and says nothing about the rest.
+
+Measured on the same project: with the allowlist in force the agent tried
+`Edit`, `Bash` and `Agent`, was refused each time with the reason, and changed
+nothing.
+
+**Drift detection** is what notices when enforcement does not hold, and it will
+not always hold — a hook can be disabled, and the engine cannot check what it
+never sees. A baseline is taken when a session starts; `safescope status` and
+`safescope drift` then name the files that changed without the engine, which are
+exactly the ones with no stored previous contents and no undo.
+
+It detects; it does not prevent. A file it names is already changed and its
+previous contents are already gone. What it buys is that the change is named
+instead of being silently absent from the record — which is what "nothing was
+recorded" looked like in every run above.
+
 ### What SafeScope is for
 
 An audited path, and a policy check before a change is made:

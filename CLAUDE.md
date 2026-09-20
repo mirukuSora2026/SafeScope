@@ -85,6 +85,20 @@ the tests.
 - Never parse a shell command to decide whether it writes. `sed -i`, a redirect
   and a script are not reliably readable, and a check that looks like protection
   without being it is worse than none. Report the gap in the status output.
+  Refusing a shell command under `mode = "allowlist"` is not an exception: it is
+  refused for not being on a list, never for what it appears to do.
+- Refuse by allowlist, never by deny list. Measured: given a list of forbidden
+  tools an agent moves to one that is not on it, and the set of tools that can
+  run a shell command is not knowable in advance. A deny list is a promise that
+  cannot be kept.
+- A baseline is never overwritten on the engine's own initiative. It records the
+  last moment the workspace was known to be accounted for, so replacing it
+  adopts everything done since — which is how drift disappears without anybody
+  deciding it should. `safescope drift accept` is a person's decision.
+- A plugin manifest is checked by running what the host would run, not what the
+  test assembles. Reading `args` and building the argv by hand hid two separate
+  manifests that the host silently ignored, both of which the tests called
+  healthy.
 
 ## Layout
 
