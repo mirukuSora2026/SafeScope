@@ -11,6 +11,7 @@
 //! situation the engine has to reason about, because the second one will not
 //! start.
 
+pub mod approval;
 pub mod wire;
 
 use std::collections::HashMap;
@@ -34,8 +35,9 @@ use crate::session::WriteSession;
 use crate::undo::UndoPlan;
 
 use self::wire::{
-    AppliedChange, ApplyChange, ApplyUndo, HistoryEntry, HistoryQuery, NoArguments, PrepareChange,
-    PreparedPlan, PreparedUndo, RequestedOperation, Status, to_mcp_error,
+    AppliedChange, ApplyChange, ApplyUndo, GrantedExpansion, HistoryEntry, HistoryQuery,
+    NoArguments, PrepareChange, PreparedPlan, PreparedUndo, RequestExpansion, RequestedOperation,
+    Status, to_mcp_error,
 };
 
 /// How many past operations `get_history` returns by default.
@@ -43,7 +45,11 @@ const DEFAULT_HISTORY: usize = 20;
 
 /// The server, and everything it is holding open.
 pub struct SafeScope {
-    session: Mutex<WriteSession>,
+    /// A tokio mutex rather than a std one: the approval flow holds this across
+    /// the question it puts to a person, and the session's view of the policy
+    /// and the budget has to still be true when the answer arrives. Releasing it
+    /// to await would reopen exactly the window the session exists to close.
+    session: tokio::sync::Mutex<WriteSession>,
     /// Plans waiting to be applied.
     ///
     /// Held here rather than passed back and forth, so `apply_change` receives
@@ -60,7 +66,7 @@ impl SafeScope {
     /// Opens a session on `root`. Fails if another SafeScope process has it.
     pub fn open(root: &std::path::Path) -> Result<Self> {
         Ok(Self {
-            session: Mutex::new(WriteSession::open(root)?),
+            session: tokio::sync::Mutex::new(WriteSession::open(root)?),
             plans: Mutex::new(HashMap::new()),
             undos: Mutex::new(HashMap::new()),
             tool_router: Self::tool_router(),
@@ -73,13 +79,13 @@ impl SafeScope {
                        everything it needs. Changes nothing in the workspace. Returns a plan \
                        id to pass to apply_change."
     )]
-    fn prepare_change(
+    async fn prepare_change(
         &self,
         Parameters(request): Parameters<PrepareChange>,
     ) -> std::result::Result<Json<PreparedPlan>, ErrorData> {
         let change = to_change_request(&request).map_err(|error| to_mcp_error(&error))?;
 
-        let session = self.session.lock().expect("session lock");
+        let session = self.session.lock().await;
         let plan = session
             .plan(&change)
             .map_err(|error| to_mcp_error(&error))?;
@@ -105,7 +111,7 @@ impl SafeScope {
         description = "Carry out a plan from prepare_change. Takes the plan id and nothing \
                        else, so the change that happens is the change that was checked."
     )]
-    fn apply_change(
+    async fn apply_change(
         &self,
         Parameters(request): Parameters<ApplyChange>,
     ) -> std::result::Result<Json<AppliedChange>, ErrorData> {
@@ -124,7 +130,7 @@ impl SafeScope {
             .map(|text| idempotency_key(text, &plan))
             .transpose()?;
 
-        let mut session = self.session.lock().expect("session lock");
+        let mut session = self.session.lock().await;
         let record = session
             .apply(&plan, key)
             .map_err(|error| to_mcp_error(&error))?;
@@ -136,15 +142,74 @@ impl SafeScope {
     }
 
     #[tool(
+        name = "request_scope_expansion",
+        description = "Ask the person to open exact paths that the policy does not currently \
+                       allow. Only for a refusal that said an expansion could change the \
+                       answer; a protected path or a deny rule is refused without anybody \
+                       being asked. The approval covers this task only, for a limited time, \
+                       and does not change the policy."
+    )]
+    async fn request_scope_expansion(
+        &self,
+        Parameters(request): Parameters<RequestExpansion>,
+        context: RequestContext<RoleServer>,
+    ) -> std::result::Result<Json<GrantedExpansion>, ErrorData> {
+        let paths = request
+            .paths
+            .iter()
+            .map(|text| RelPath::parse(text))
+            .collect::<std::result::Result<Vec<_>, _>>()
+            .map_err(|denial| to_mcp_error(&crate::error::Error::Denied(denial)))?;
+        let operations = if request.operations.is_empty() {
+            crate::domain::OpSet::all()
+        } else {
+            approval::parse_operations(&request.operations).map_err(|error| to_mcp_error(&error))?
+        };
+
+        let expansion = approval::ExpansionRequest {
+            paths,
+            operations,
+            reason: request.reason,
+        };
+
+        // The lock is held across the question, which can take as long as a
+        // person takes. That is deliberate: the session's view of the policy and
+        // the budget has to still be true when the answer arrives.
+        let mut session = self.session.lock().await;
+        let grant = approval::request_expansion(&context.peer, &mut session, &expansion)
+            .await
+            .map_err(|error| to_mcp_error(&error))?;
+
+        Ok(Json(GrantedExpansion {
+            paths: grant
+                .paths
+                .iter()
+                .map(|path| path.as_str().to_owned())
+                .collect(),
+            operations: grant
+                .ops
+                .iter()
+                .map(|operation| operation.to_string())
+                .collect(),
+            expires_in_seconds: seconds_until(grant.expires_at),
+            approved_via: if grant.issued_by.is_terminal() {
+                "terminal".to_owned()
+            } else {
+                "client".to_owned()
+            },
+        }))
+    }
+
+    #[tool(
         name = "get_status",
         description = "What this task has changed, what is left in the budget, and what \
                        SafeScope does not cover."
     )]
-    fn get_status(
+    async fn get_status(
         &self,
         Parameters(_): Parameters<NoArguments>,
     ) -> std::result::Result<Json<Status>, ErrorData> {
-        let session = self.session.lock().expect("session lock");
+        let session = self.session.lock().await;
         let status = session.status().map_err(|error| to_mcp_error(&error))?;
         Ok(Json(Status::of(
             &status,
@@ -157,11 +222,11 @@ impl SafeScope {
         description = "The operations this task has performed, most recent first, with what \
                        became of each."
     )]
-    fn get_history(
+    async fn get_history(
         &self,
         Parameters(query): Parameters<HistoryQuery>,
     ) -> std::result::Result<Json<Vec<HistoryEntry>>, ErrorData> {
-        let session = self.session.lock().expect("session lock");
+        let session = self.session.lock().await;
         let mut history = session
             .journal()
             .history(session.task())
@@ -178,11 +243,11 @@ impl SafeScope {
                        nothing. Refuses if the file has been edited since, rather than \
                        overwriting that edit."
     )]
-    fn prepare_undo(
+    async fn prepare_undo(
         &self,
         Parameters(_): Parameters<NoArguments>,
     ) -> std::result::Result<Json<PreparedUndo>, ErrorData> {
-        let session = self.session.lock().expect("session lock");
+        let session = self.session.lock().await;
         let undo = session
             .prepare_undo()
             .map_err(|error| to_mcp_error(&error))?;
@@ -212,7 +277,7 @@ impl SafeScope {
         description = "Carry out a reversal from prepare_undo. Does not spend the change \
                        budget."
     )]
-    fn apply_undo(
+    async fn apply_undo(
         &self,
         Parameters(request): Parameters<ApplyUndo>,
     ) -> std::result::Result<Json<AppliedChange>, ErrorData> {
@@ -225,7 +290,7 @@ impl SafeScope {
             .cloned()
             .ok_or_else(|| unknown_plan(&request.plan_id))?;
 
-        let mut session = self.session.lock().expect("session lock");
+        let mut session = self.session.lock().await;
         let record = session
             .apply_undo(&undo)
             .map_err(|error| to_mcp_error(&error))?;
@@ -266,7 +331,7 @@ impl ServerHandler for SafeScope {
         let supports_elicitation = request.capabilities.elicitation.is_some();
         let client = request.client_info.name.clone();
         async move {
-            let mut session = self.session.lock().expect("session lock");
+            let mut session = self.session.lock().await;
             session.note_client(client, supports_elicitation);
             Ok(self.get_info())
         }

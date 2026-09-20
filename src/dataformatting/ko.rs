@@ -106,6 +106,40 @@ pub(super) fn render(msg: &Msg) -> String {
             "아직 아무것도 바꿀 수 없습니다. 허용할 경로를 {policy} 에 적은 뒤 \
              `safescope policy approve` 를 실행하세요."
         ),
+        Msg::ExpansionPrompt {
+            paths,
+            operations,
+            reason,
+        } => format!(
+            "SafeScope 가 바꿀 수 있는 범위를 넓혀달라고 요청하고 있습니다.\n\n\
+             경로: {paths}\n\
+             연산: {operations}\n\
+             제시된 이유: {reason}\n\n\
+             승인하면 이 작업에 한해, 제한된 시간 동안, 정확히 이 경로들만 열립니다. \
+             정책이 바뀌지는 않습니다."
+        ),
+        Msg::ExpansionAlreadyAllowed { path } => {
+            format!("{path} 은 이미 허용 범위 안입니다. 승인할 것이 없습니다.")
+        }
+        Msg::ExpansionCannotBeGranted { path } => format!(
+            "{path} 은 승인으로 열 수 없습니다. 보호 경로나 deny 규칙은 권한의 문제가 \
+             아니어서, 물어봐야 사람의 주의만 낭비합니다."
+        ),
+        Msg::ExpansionNeedsTerminal => "이 클라이언트는 사람에게 질문할 수 없어서, \
+이 경로로는 승인을 받을 수 없습니다."
+            .to_owned(),
+        Msg::ExpansionLimitReached { used, limit } => format!(
+            "이 작업은 클라이언트를 통해 이미 {limit} 건 중 {used} 건의 승인을 받았습니다. \
+             이후로는 터미널에서 받아야 합니다. 요청이 길게 이어지다 조용히 넓어지는 일을 \
+             막기 위해서입니다."
+        ),
+        Msg::ExpansionDeclined => "요청이 거절됐습니다. 아무것도 열리지 않았습니다.".to_owned(),
+        Msg::ExpansionGranted { paths, minutes } => {
+            format!("승인됨: 경로 {paths}개, 이 작업에 한해, {minutes}분 동안.")
+        }
+        Msg::HintApproveAtATerminal { paths } => {
+            format!("터미널에서 `safescope approve {paths}` 를 실행하면 직접 승인할 수 있습니다.")
+        }
         Msg::McpInstructions => "SafeScope 는 파일 변경을 승인된 범위와 한도 안에 두고, \
 검토하고 되돌릴 수 있도록 기록합니다.\n\n\
 prepare_change 로 변경을 검사하고 준비하세요. 이 단계는 아무것도 바꾸지 않습니다. \

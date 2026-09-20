@@ -250,3 +250,28 @@ pub fn to_mcp_error(error: &Error) -> rmcp::ErrorData {
         rmcp::ErrorData::internal_error(message, Some(data))
     }
 }
+
+/// A request to widen what may be changed.
+#[derive(Debug, Clone, Deserialize, schemars::JsonSchema)]
+pub struct RequestExpansion {
+    /// Exact paths, relative to the workspace root. Never patterns: this opens
+    /// what was asked for and nothing beside it.
+    pub paths: Vec<String>,
+    /// Which operations to ask for. Empty means all of them.
+    #[serde(default)]
+    pub operations: Vec<String>,
+    /// Why it is needed. Shown to the person verbatim, so it should read as an
+    /// explanation rather than a label.
+    pub reason: String,
+}
+
+/// What an approval opened.
+#[derive(Debug, Clone, Serialize, schemars::JsonSchema)]
+pub struct GrantedExpansion {
+    pub paths: Vec<String>,
+    pub operations: Vec<String>,
+    /// How long the approval lasts. It covers this task only.
+    pub expires_in_seconds: u64,
+    /// How the approval was obtained, so the transcript records which it was.
+    pub approved_via: String,
+}

@@ -106,6 +106,40 @@ pub(super) fn render(msg: &Msg) -> String {
             "Nothing can be changed yet. Add the paths you want to allow to {policy}, then run \
              `safescope policy approve`."
         ),
+        Msg::ExpansionPrompt {
+            paths,
+            operations,
+            reason,
+        } => format!(
+            "SafeScope is being asked to widen what it may change.\n\n\
+             Paths: {paths}\n\
+             Operations: {operations}\n\
+             Reason given: {reason}\n\n\
+             Approving opens exactly these paths, for this task, for a limited time. It does \
+             not change the policy."
+        ),
+        Msg::ExpansionAlreadyAllowed { path } => {
+            format!("{path} is already within the allowed scope; nothing needs approving.")
+        }
+        Msg::ExpansionCannotBeGranted { path } => format!(
+            "{path} cannot be opened by an approval. A protected path or a deny rule is not \
+             a matter of permission, so asking would only waste somebody's attention."
+        ),
+        Msg::ExpansionNeedsTerminal => "This client cannot put a question to a person, so no \
+approval can be obtained through it."
+            .to_owned(),
+        Msg::ExpansionLimitReached { used, limit } => format!(
+            "This task has already obtained {used} of {limit} approvals through the client. \
+             Further ones have to be given at a terminal, so a long run of requests cannot \
+             quietly become a wide one."
+        ),
+        Msg::ExpansionDeclined => "The request was declined. Nothing was opened.".to_owned(),
+        Msg::ExpansionGranted { paths, minutes } => {
+            format!("Approved: {paths} path(s), for this task, for {minutes} minutes.")
+        }
+        Msg::HintApproveAtATerminal { paths } => {
+            format!("Run `safescope approve {paths}` in a terminal to grant this yourself.")
+        }
         Msg::McpInstructions => "SafeScope keeps file changes inside an approved scope and \
 budget, and records them so they can be reviewed and undone.\n\n\
 Call prepare_change to check a change and stage it; it alters nothing. Then call \

@@ -84,6 +84,27 @@ fn every_language_renders_every_message() {
         Msg::HintFillInAllowThenApprove {
             policy: ".safescope/policy.toml".into(),
         },
+        Msg::ExpansionPrompt {
+            paths: "src/a.rs".into(),
+            operations: "replace".into(),
+            reason: "the fix needs it".into(),
+        },
+        Msg::ExpansionAlreadyAllowed {
+            path: "src/a.rs".into(),
+        },
+        Msg::ExpansionCannotBeGranted {
+            path: ".git/config".into(),
+        },
+        Msg::ExpansionNeedsTerminal,
+        Msg::ExpansionLimitReached { used: 3, limit: 3 },
+        Msg::ExpansionDeclined,
+        Msg::ExpansionGranted {
+            paths: 1,
+            minutes: 30,
+        },
+        Msg::HintApproveAtATerminal {
+            paths: "src/a.rs".into(),
+        },
         Msg::McpInstructions,
         Msg::McpCoverageNotice,
         Msg::McpMissingField {
@@ -268,7 +289,7 @@ fn every_language_renders_every_message() {
     // omission.
     assert_eq!(
         samples.len(),
-        94,
+        102,
         "add the new Msg variant to this list, then update the count"
     );
 

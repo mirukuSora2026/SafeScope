@@ -127,6 +127,32 @@ pub enum Msg {
         policy: String,
     },
 
+    // ── Scope expansion ────────────────────────────────────────────────
+    ExpansionPrompt {
+        paths: String,
+        operations: String,
+        reason: String,
+    },
+    ExpansionAlreadyAllowed {
+        path: String,
+    },
+    ExpansionCannotBeGranted {
+        path: String,
+    },
+    ExpansionNeedsTerminal,
+    ExpansionLimitReached {
+        used: u32,
+        limit: u32,
+    },
+    ExpansionDeclined,
+    ExpansionGranted {
+        paths: usize,
+        minutes: u64,
+    },
+    HintApproveAtATerminal {
+        paths: String,
+    },
+
     // ── MCP server ─────────────────────────────────────────────────────
     McpInstructions,
     McpCoverageNotice,

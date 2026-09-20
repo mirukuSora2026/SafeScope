@@ -106,6 +106,41 @@ pub(super) fn render(msg: &Msg) -> String {
             "Пока ничего нельзя изменить. Добавьте разрешаемые пути в {policy}, затем \
              выполните `safescope policy approve`."
         ),
+        Msg::ExpansionPrompt {
+            paths,
+            operations,
+            reason,
+        } => format!(
+            "SafeScope просит расширить то, что ему разрешено менять.\n\n\
+             Пути: {paths}\n\
+             Операции: {operations}\n\
+             Указанная причина: {reason}\n\n\
+             Одобрение откроет ровно эти пути, только для этой задачи и на ограниченное \
+             время. Политику оно не меняет."
+        ),
+        Msg::ExpansionAlreadyAllowed { path } => {
+            format!("{path} уже входит в разрешённую область; одобрять нечего.")
+        }
+        Msg::ExpansionCannotBeGranted { path } => format!(
+            "{path} нельзя открыть одобрением. Защищённый путь или правило deny — не вопрос \
+             разрешения, поэтому вопрос лишь отнял бы у кого-то внимание."
+        ),
+        Msg::ExpansionNeedsTerminal => "Этот клиент не может задать вопрос человеку, поэтому \
+получить одобрение через него нельзя."
+            .to_owned(),
+        Msg::ExpansionLimitReached { used, limit } => format!(
+            "Эта задача уже получила {used} из {limit} одобрений через клиент. Дальнейшие \
+             нужно давать в терминале, чтобы длинная череда запросов не стала тихо широкой."
+        ),
+        Msg::ExpansionDeclined => "Запрос отклонён. Ничего не открыто.".to_owned(),
+        Msg::ExpansionGranted { paths, minutes } => {
+            format!("Одобрено: путей — {paths}, только для этой задачи, на {minutes} мин.")
+        }
+        Msg::HintApproveAtATerminal { paths } => {
+            format!(
+                "Выполните `safescope approve {paths}` в терминале, чтобы одобрить самостоятельно."
+            )
+        }
         Msg::McpInstructions => "SafeScope удерживает изменения файлов в пределах \
 утверждённой области и лимитов и записывает их, чтобы их можно было просмотреть и отменить.\n\n\
 Вызовите prepare_change, чтобы проверить и подготовить изменение — он ничего не меняет. \

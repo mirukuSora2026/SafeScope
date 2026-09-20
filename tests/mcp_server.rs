@@ -2,180 +2,15 @@
 //!
 //! Real JSON-RPC over the real binary's stdio. Calling the tool functions
 //! directly would test the author's idea of the protocol rather than the
-//! protocol, and the wire shape is the part a client actually depends on.
+//! protocol, and the wire shape is what a client actually depends on.
 
-use std::io::{BufRead as _, BufReader, Write as _};
-use std::path::Path;
-use std::process::{Child, ChildStdin, ChildStdout, Command, Stdio};
+mod mcp_client;
 
-use safescope::cli::approve;
-use safescope::registry;
-use safescope::store::DATA_DIR_ENV;
-use serde_json::{Value, json};
-use tempfile::TempDir;
-
-const BINARY: &str = env!("CARGO_BIN_EXE_safescope");
-
-const POLICY: &str = "\
-schema_version = 1
-
-[scope]
-allow = [\"src/**\"]
-deny = [\"**/.env\"]
-";
-
-fn env_lock() -> std::sync::MutexGuard<'static, ()> {
-    static LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
-    LOCK.lock().unwrap_or_else(|poisoned| poisoned.into_inner())
-}
-
-/// A running server with a request/response channel to it.
-struct Client {
-    _data: TempDir,
-    root: TempDir,
-    child: Child,
-    stdin: ChildStdin,
-    stdout: BufReader<ChildStdout>,
-    next_id: i64,
-}
-
-impl Client {
-    /// Registers a workspace, approves `POLICY`, and completes the handshake.
-    fn connect() -> Self {
-        let data = TempDir::new().expect("data");
-        let root = TempDir::new().expect("workspace");
-
-        {
-            let _guard = env_lock();
-            unsafe { std::env::set_var(DATA_DIR_ENV, data.path()) };
-            std::fs::create_dir_all(root.path().join("src")).expect("mkdir");
-            let registration = registry::init(root.path()).expect("init");
-            std::fs::write(registration.policy_path(), POLICY).expect("policy");
-            let policy = approve::check_policy(POLICY).expect("valid");
-            approve::perform(&registration, policy, POLICY).expect("approve");
-        }
-
-        let mut child = Command::new(BINARY)
-            .env(DATA_DIR_ENV, data.path())
-            .env("SAFESCOPE_LANG", "en")
-            .arg("--workspace")
-            .arg(root.path())
-            .arg("mcp")
-            .stdin(Stdio::piped())
-            .stdout(Stdio::piped())
-            .stderr(Stdio::null())
-            .spawn()
-            .expect("spawn server");
-
-        let mut client = Self {
-            stdin: child.stdin.take().expect("stdin"),
-            stdout: BufReader::new(child.stdout.take().expect("stdout")),
-            child,
-            _data: data,
-            root,
-            next_id: 0,
-        };
-
-        // Declaring elicitation is what tells the engine this client could put a
-        // question to a person.
-        client.request(
-            "initialize",
-            json!({
-                "protocolVersion": "2025-06-18",
-                "capabilities": { "elicitation": {} },
-                "clientInfo": { "name": "claude-code", "version": "1.0" },
-            }),
-        );
-        client.notify("notifications/initialized");
-        client
-    }
-
-    fn request(&mut self, method: &str, params: Value) -> Value {
-        self.next_id += 1;
-        let id = self.next_id;
-        let message = json!({
-            "jsonrpc": "2.0", "id": id, "method": method, "params": params,
-        });
-        writeln!(self.stdin, "{message}").expect("write");
-        self.stdin.flush().expect("flush");
-
-        loop {
-            let mut line = String::new();
-            let read = self.stdout.read_line(&mut line).expect("read");
-            assert!(read > 0, "the server closed while answering {method}");
-            let Ok(response) = serde_json::from_str::<Value>(&line) else {
-                continue;
-            };
-            if response.get("id") == Some(&json!(id)) {
-                return response;
-            }
-        }
-    }
-
-    fn notify(&mut self, method: &str) {
-        let message = json!({ "jsonrpc": "2.0", "method": method });
-        writeln!(self.stdin, "{message}").expect("write");
-        self.stdin.flush().expect("flush");
-    }
-
-    /// Calls a tool and returns its structured result.
-    fn call(&mut self, tool: &str, arguments: Value) -> Value {
-        let response = self.request(
-            "tools/call",
-            json!({ "name": tool, "arguments": arguments }),
-        );
-        assert!(
-            response.get("error").is_none(),
-            "{tool} failed: {}",
-            response["error"]
-        );
-        let result = &response["result"];
-        assert_ne!(
-            result["isError"],
-            json!(true),
-            "{tool} reported an error: {result}"
-        );
-        result["structuredContent"].clone()
-    }
-
-    /// Calls a tool expecting it to be refused, and returns the error.
-    fn call_expecting_refusal(&mut self, tool: &str, arguments: Value) -> Value {
-        let response = self.request(
-            "tools/call",
-            json!({ "name": tool, "arguments": arguments }),
-        );
-        response
-            .get("error")
-            .cloned()
-            .unwrap_or_else(|| panic!("{tool} was expected to be refused: {response}"))
-    }
-
-    fn write(&self, relative: &str, contents: &str) {
-        std::fs::write(self.root.path().join(relative), contents).expect("write");
-    }
-
-    fn read(&self, relative: &str) -> String {
-        std::fs::read_to_string(self.root.path().join(relative)).expect("read")
-    }
-
-    fn exists(&self, relative: &str) -> bool {
-        self.root.path().join(relative).exists()
-    }
-
-    fn workspace(&self) -> &Path {
-        self.root.path()
-    }
-}
-
-impl Drop for Client {
-    fn drop(&mut self) {
-        let _ = self.child.kill();
-        let _ = self.child.wait();
-    }
-}
+use mcp_client::{Client, POLICY};
+use serde_json::json;
 
 #[test]
-fn the_server_offers_six_tools() {
+fn the_server_offers_its_whole_surface() {
     let mut client = Client::connect();
     let response = client.request("tools/list", json!({}));
 
@@ -196,6 +31,7 @@ fn the_server_offers_six_tools() {
             "get_status",
             "prepare_change",
             "prepare_undo",
+            "request_scope_expansion",
         ]
     );
 }

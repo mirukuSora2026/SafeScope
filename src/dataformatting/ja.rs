@@ -111,6 +111,40 @@ pub(super) fn render(msg: &Msg) -> String {
             "まだ何も変更できません。許可したいパスを {policy} に書いてから \
              `safescope policy approve` を実行してください。"
         ),
+        Msg::ExpansionPrompt {
+            paths,
+            operations,
+            reason,
+        } => format!(
+            "SafeScope が変更できる範囲の拡大を求めています。\n\n\
+             パス: {paths}\n\
+             操作: {operations}\n\
+             提示された理由: {reason}\n\n\
+             承認すると、このタスクに限り、限られた時間だけ、ここに挙げたパスだけが\
+             開きます。ポリシーが変わるわけではありません。"
+        ),
+        Msg::ExpansionAlreadyAllowed { path } => {
+            format!("{path} はすでに許可範囲内です。承認するものはありません。")
+        }
+        Msg::ExpansionCannotBeGranted { path } => format!(
+            "{path} は承認では開けません。保護パスや deny ルールは権限の問題ではないため、\
+             尋ねても人の注意を無駄にするだけです。"
+        ),
+        Msg::ExpansionNeedsTerminal => "このクライアントは人に問いかけられないため、\
+この経路では承認を得られません。"
+            .to_owned(),
+        Msg::ExpansionLimitReached { used, limit } => format!(
+            "このタスクはクライアント経由ですでに {limit} 件中 {used} 件の承認を得ています。\
+             以降は端末で行う必要があります。要求が続くうちに静かに範囲が広がることを\
+             防ぐためです。"
+        ),
+        Msg::ExpansionDeclined => "要求は拒否されました。何も開かれていません。".to_owned(),
+        Msg::ExpansionGranted { paths, minutes } => {
+            format!("承認しました: パス {paths} 件、このタスクに限り、{minutes} 分間。")
+        }
+        Msg::HintApproveAtATerminal { paths } => {
+            format!("端末で `safescope approve {paths}` を実行すれば自分で承認できます。")
+        }
         Msg::McpInstructions => "SafeScope はファイル変更を承認済みの範囲と上限の内側に\
 とどめ、確認と取り消しができるよう記録します。\n\n\
 まず prepare_change で変更を検査し準備します。この段階では何も変更されません。\

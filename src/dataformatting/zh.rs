@@ -98,6 +98,39 @@ pub(super) fn render(msg: &Msg) -> String {
                 "目前还不能更改任何内容。请在 {policy} 中填写要允许的路径，然后运行 `safescope policy approve`。"
             )
         }
+        Msg::ExpansionPrompt {
+            paths,
+            operations,
+            reason,
+        } => format!(
+            "SafeScope 正在请求扩大可更改的范围。\n\n\
+             路径：{paths}\n\
+             操作：{operations}\n\
+             所给理由：{reason}\n\n\
+             批准将仅为本任务、在有限时间内开放这些路径，并不会更改策略。"
+        ),
+        Msg::ExpansionAlreadyAllowed { path } => {
+            format!("{path} 已在允许范围内，无需批准。")
+        }
+        Msg::ExpansionCannotBeGranted { path } => {
+            format!(
+                "{path} 无法通过批准开放。受保护路径或 deny 规则不是权限问题，询问只会浪费他人注意力。"
+            )
+        }
+        Msg::ExpansionNeedsTerminal => {
+            "此客户端无法向用户提问，因此无法通过它获得批准。".to_owned()
+        }
+        Msg::ExpansionLimitReached { used, limit } => format!(
+            "此任务已通过客户端获得 {limit} 次中的 {used} 次批准。\
+             之后的批准须在终端进行，以免一连串请求悄然变成一次大范围放开。"
+        ),
+        Msg::ExpansionDeclined => "请求已被拒绝，未开放任何内容。".to_owned(),
+        Msg::ExpansionGranted { paths, minutes } => {
+            format!("已批准：{paths} 个路径，仅限本任务，有效 {minutes} 分钟。")
+        }
+        Msg::HintApproveAtATerminal { paths } => {
+            format!("可在终端运行 `safescope approve {paths}` 自行批准。")
+        }
         Msg::McpInstructions => "SafeScope 将文件更改保持在已批准的范围与限额之内，\
 并加以记录，以便复查和撤销。\n\n\
 先调用 prepare_change 检查并准备更改，该步骤不改动任何内容；\

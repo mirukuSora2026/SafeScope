@@ -59,6 +59,11 @@ the tests.
   The session holds the workspace lock for its lifetime, which is what makes the
   budget's check-then-reserve sound, and it is the one place that knows the
   executor's stores must be the planner's stores.
+- An approval obtained through the client is weaker evidence than one typed at a
+  terminal, and everything says so: the grant records which it was, the status
+  output counts them, a client that never declared the elicitation capability
+  cannot be asked at all, and a run of requests escalates to a terminal. Never
+  collapse the two into a boolean.
 - Undo is not a new grant. It reverses what the engine did under an approved
   policy, so it skips scope evaluation (`Authority::Reversal`) and does not spend
   the change budget. Protected paths still apply. Checking either would trap
@@ -108,19 +113,22 @@ src/
 ├─ registry.rs         .safescope/ bootstrap and workspace identity
 ├─ store.rs            state layout, atomic writes
 │  ├─ content.rs       content-addressed blobs: snapshots (I2) and payloads
+│  ├─ grant_store.rs   temporary approvals, visible across processes
 │  ├─ lock.rs          one writer at a time, per workspace
 │  ├─ task_store.rs    which task the workspace is on
 │  └─ policy_store.rs  approved policy versions
 ├─ mcp.rs              the MCP server Claude talks to
+│  ├─ approval.rs     asking a person to widen the scope
 │  └─ wire.rs         what the tools take and return
-└─ cli.rs              init, policy approve/show, check, hook, mcp
-   ├─ approve.rs
+└─ cli.rs              init, policy, approve, check, hook, mcp
+   ├─ approve.rs      approving a policy
+   ├─ grant.rs        approving a scope expansion at a terminal
    ├─ check.rs
-   └─ hook.rs           the PreToolUse hook
+   └─ hook.rs         the PreToolUse hook
 ```
 
-Modules still to come: elicitation-based approvals, the plugin package, and the
-CLI commands for status and recover.
+Modules still to come: the plugin package and the CLI commands for status and
+recover.
 
 ## Commands
 

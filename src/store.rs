@@ -10,6 +10,7 @@
 //! and believe it.
 
 pub mod content;
+pub mod grant_store;
 pub mod lock;
 pub mod policy_store;
 pub mod task_store;

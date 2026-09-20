@@ -30,6 +30,7 @@ use crate::policy::{
 use crate::recovery::{Recovery, RecoveryReport};
 use crate::registry::{self, Registration};
 use crate::store::content::ContentStore;
+use crate::store::grant_store::GrantStore;
 use crate::store::lock::WorkspaceLock;
 use crate::store::policy_store::PolicyStore;
 use crate::store::task_store::TaskStore;
@@ -49,8 +50,14 @@ pub struct WriteSession {
     staging: ContentStore,
     tasks: TaskStore,
     task: TaskId,
-    grants: Vec<Grant>,
+    grants: GrantStore,
     client: Option<ConnectedClient>,
+    /// Approvals obtained through the client so far.
+    ///
+    /// Counted so a long run of small requests cannot quietly add up to a
+    /// wide one: past a limit, further approvals have to be given at a
+    /// terminal.
+    elicitations: u32,
 }
 
 /// Who is driving this session.
@@ -106,8 +113,9 @@ impl WriteSession {
             staging: ContentStore::staging(&paths),
             tasks,
             task,
-            grants: Vec::new(),
+            grants: GrantStore::new(&paths),
             client: None,
+            elicitations: 0,
             registration,
         })
     }
@@ -128,9 +136,14 @@ impl WriteSession {
         &self.journal
     }
 
-    /// Temporary approvals in force for this session.
-    pub fn grants(&self) -> &[Grant] {
-        &self.grants
+    /// Temporary approvals in force right now.
+    ///
+    /// Read from the store on each call rather than cached, so an approval
+    /// issued at a terminal while this session runs is visible immediately —
+    /// which is the whole point of the terminal path.
+    pub fn grants(&self) -> Result<Vec<Grant>> {
+        self.grants
+            .usable(self.task, self.policy_version, std::time::SystemTime::now())
     }
 
     /// Records who connected and what they can do.
@@ -148,12 +161,22 @@ impl WriteSession {
         self.client.as_ref()
     }
 
-    /// Adds an approval obtained through the approval flow.
+    /// How many approvals this task has collected through the client.
+    pub const fn elicitations(&self) -> u32 {
+        self.elicitations
+    }
+
+    /// Records that one more was collected.
+    pub fn note_elicitation(&mut self) {
+        self.elicitations += 1;
+    }
+
+    /// Records an approval obtained through the approval flow.
     ///
     /// Only the approval flow calls this. A grant that arrived any other way is
     /// not evidence of anything (I6).
-    pub fn admit_grant(&mut self, grant: Grant) {
-        self.grants.push(grant);
+    pub fn admit_grant(&self, grant: &Grant) -> Result<()> {
+        self.grants.issue(grant)
     }
 
     /// Checks a request and stages everything it will need.
@@ -165,7 +188,7 @@ impl WriteSession {
             snapshots: &self.snapshots,
             staging: &self.staging,
         }
-        .plan(request, &self.context())
+        .plan(request, &self.context(&self.grants()?))
     }
 
     /// Carries out a plan this session prepared.
@@ -256,7 +279,7 @@ impl WriteSession {
             unsettled: unsettled.len(),
             last_operation: self.journal.history(self.task)?.pop(),
             unapproved_policy_edits: policy_edited,
-            grants: self.grants.len(),
+            grants: self.grants()?.len(),
         })
     }
 
@@ -267,9 +290,9 @@ impl WriteSession {
         Ok(())
     }
 
-    fn context(&self) -> EvaluationContext<'_> {
+    fn context<'a>(&self, grants: &'a [Grant]) -> EvaluationContext<'a> {
         EvaluationContext {
-            grants: &self.grants,
+            grants,
             task: self.task,
             policy_version: self.policy_version,
             now: std::time::SystemTime::now(),

@@ -222,5 +222,5 @@ fn a_session_has_no_grants_until_one_is_admitted() {
     let _guard = env_lock();
     let (_data, root) = workspace();
     let session = WriteSession::open(root.path()).expect("open");
-    assert!(session.grants().is_empty());
+    assert!(session.grants().expect("grants").is_empty());
 }

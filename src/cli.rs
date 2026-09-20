@@ -6,6 +6,7 @@
 
 pub mod approve;
 pub mod check;
+pub mod grant;
 pub mod hook;
 
 use std::path::PathBuf;
@@ -49,6 +50,18 @@ pub enum Command {
     Policy {
         #[command(subcommand)]
         action: PolicyAction,
+    },
+    /// Open exact paths for the current task, after confirming at a terminal.
+    ///
+    /// Grants exactly the paths named, for a limited time. It does not change
+    /// the policy.
+    Approve {
+        /// Paths relative to the workspace root. Never patterns.
+        #[arg(required = true, value_name = "PATH")]
+        paths: Vec<String>,
+        /// Which operations to allow. Defaults to all of them.
+        #[arg(long = "op", value_name = "OPERATION")]
+        operations: Vec<String>,
     },
     /// Serve the MCP tools over stdio.
     ///
@@ -115,6 +128,9 @@ fn dispatch(cli: &Cli) -> Result<i32> {
         Command::Policy {
             action: PolicyAction::Show,
         } => approve::show(&cli.workspace).map(|()| exit::OK),
+        Command::Approve { paths, operations } => {
+            grant::run(&cli.workspace, paths, operations).map(|()| exit::OK)
+        }
         Command::Mcp => serve_mcp(&cli.workspace).map(|()| exit::OK),
         Command::Hook => hook::run(),
         Command::Check { path, op } => check::run(&cli.workspace, path, op),
