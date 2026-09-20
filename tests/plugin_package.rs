@@ -43,6 +43,86 @@ fn argv(entry: &Value, workspace: &Path) -> Vec<String> {
         .collect()
 }
 
+/// Runs a JSON-RPC conversation against the server and returns its replies.
+fn converse(command: &[String], cwd: &Path, requests: &[Value]) -> Vec<Value> {
+    let mut child = Command::new(BINARY)
+        .args(command)
+        .current_dir(cwd)
+        .env("SAFESCOPE_LANG", "en")
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::null())
+        .spawn()
+        .expect("the manifest's command runs");
+
+    let mut script = String::new();
+    script.push_str(
+        &json!({
+            "jsonrpc": "2.0", "id": 1, "method": "initialize",
+            "params": {
+                "protocolVersion": "2025-06-18",
+                "capabilities": {},
+                "clientInfo": { "name": "test", "version": "1" },
+            },
+        })
+        .to_string(),
+    );
+    script.push('\n');
+    script
+        .push_str(&json!({ "jsonrpc": "2.0", "method": "notifications/initialized" }).to_string());
+    script.push('\n');
+    for request in requests {
+        script.push_str(&request.to_string());
+        script.push('\n');
+    }
+
+    child
+        .stdin
+        .take()
+        .expect("stdin")
+        .write_all(script.as_bytes())
+        .expect("write");
+    let output = child.wait_with_output().expect("wait");
+    String::from_utf8_lossy(&output.stdout)
+        .lines()
+        .filter_map(|line| serde_json::from_str(line).ok())
+        .collect()
+}
+
+/// How many tools the server offers.
+fn list_tools(command: &[String], cwd: &Path) -> usize {
+    let replies = converse(
+        command,
+        cwd,
+        &[json!({
+            "jsonrpc": "2.0", "id": 2, "method": "tools/list",
+        })],
+    );
+    replies
+        .iter()
+        .find(|reply| reply.get("id") == Some(&json!(2)))
+        .and_then(|reply| reply["result"]["tools"].as_array())
+        .map_or(0, Vec::len)
+}
+
+/// The error a tool call returns.
+fn call_tool(command: &[String], cwd: &Path, tool: &str) -> Value {
+    let replies = converse(
+        command,
+        cwd,
+        &[json!({
+            "jsonrpc": "2.0", "id": 3, "method": "tools/call",
+            "params": { "name": tool, "arguments": {} },
+        })],
+    );
+    replies
+        .iter()
+        .find(|reply| reply.get("id") == Some(&json!(3)))
+        .and_then(|reply| reply.get("error"))
+        .cloned()
+        .unwrap_or_else(|| panic!("{tool} was expected to fail: {replies:?}"))
+}
+
 #[test]
 fn the_manifest_names_files_that_exist() {
     let manifest = read_json(".claude-plugin/plugin.json");
@@ -154,10 +234,14 @@ fn the_hook_command_the_manifest_names_actually_answers() {
 
 #[test]
 fn the_mcp_command_the_manifest_names_actually_serves() {
+    // On a workspace SafeScope knows nothing about. An earlier version refused
+    // to start here, and this test asserted that as if it were desirable — but a
+    // server that never appears is one Claude cannot tell apart from a plugin
+    // that was never installed, so it silently falls back to whatever else it
+    // has. Starting and saying what is wrong is the more useful failure.
     let workspace = TempDir::new().expect("workspace");
     let servers = read_json(".mcp.json");
     let server = &servers["mcpServers"]["safescope"];
-    let command = argv(server, workspace.path());
 
     assert!(
         server["command"]
@@ -166,21 +250,40 @@ fn the_mcp_command_the_manifest_names_actually_serves() {
             .contains("${CLAUDE_PLUGIN_ROOT}"),
         "the binary is resolved relative to the plugin, not found on PATH"
     );
+    // ${CLAUDE_PROJECT_DIR} is not expanded in these arguments — the server
+    // received it literally and died — so the workspace comes from the working
+    // directory the host launches it in.
+    for argument in server["args"].as_array().expect("args") {
+        assert!(
+            !argument
+                .as_str()
+                .expect("argument")
+                .contains("${CLAUDE_PROJECT_DIR}"),
+            "this placeholder is not expanded here: {argument}"
+        );
+    }
 
-    let mut child = Command::new(BINARY)
-        .args(&command)
-        .stdin(Stdio::piped())
-        .stdout(Stdio::piped())
-        .stderr(Stdio::null())
-        .spawn()
-        .expect("the manifest's command runs");
+    let tools = list_tools(&argv(server, workspace.path()), workspace.path());
+    assert_eq!(
+        tools, 7,
+        "the server offers its tools even on a bare directory"
+    );
+}
 
-    // An unregistered workspace: the server should refuse to start rather than
-    // serve a project it knows nothing about.
-    let outcome = child.wait().expect("wait");
+#[test]
+fn a_tool_call_on_an_unknown_workspace_says_what_to_do() {
+    let workspace = TempDir::new().expect("workspace");
+    let servers = read_json(".mcp.json");
+    let command = argv(&servers["mcpServers"]["safescope"], workspace.path());
+
+    let error = call_tool(&command, workspace.path(), "get_status");
+    assert_eq!(error["data"]["code"], "WORKSPACE_NOT_REGISTERED");
     assert!(
-        !outcome.success(),
-        "serving an unregistered project should fail"
+        error["message"]
+            .as_str()
+            .expect("message")
+            .contains("safescope init"),
+        "{error}"
     );
 }
 

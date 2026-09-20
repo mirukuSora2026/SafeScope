@@ -45,11 +45,23 @@ const DEFAULT_HISTORY: usize = 20;
 
 /// The server, and everything it is holding open.
 pub struct SafeScope {
+    /// The project this server speaks for.
+    root: PathBuf,
+    /// Opened on first use, not at startup.
+    ///
+    /// A workspace with no approved policy is a workspace SafeScope permits
+    /// nothing in — but refusing to start over it would leave Claude unable to
+    /// tell SafeScope apart from not being installed, and quietly falling back
+    /// to whatever else it has. Starting and saying what is wrong is the more
+    /// useful failure.
+    ///
     /// A tokio mutex rather than a std one: the approval flow holds this across
     /// the question it puts to a person, and the session's view of the policy
     /// and the budget has to still be true when the answer arrives. Releasing it
     /// to await would reopen exactly the window the session exists to close.
-    session: tokio::sync::Mutex<WriteSession>,
+    session: tokio::sync::Mutex<Option<WriteSession>>,
+    /// Recorded during initialize, applied when the session opens.
+    client: Mutex<Option<(String, bool)>>,
     /// Plans waiting to be applied.
     ///
     /// Held here rather than passed back and forth, so `apply_change` receives
@@ -63,14 +75,38 @@ pub struct SafeScope {
 
 #[tool_router]
 impl SafeScope {
-    /// Opens a session on `root`. Fails if another SafeScope process has it.
+    /// Prepares a server for `root`. The workspace is opened on first use.
     pub fn open(root: &std::path::Path) -> Result<Self> {
         Ok(Self {
-            session: tokio::sync::Mutex::new(WriteSession::open(root)?),
+            root: root.to_path_buf(),
+            session: tokio::sync::Mutex::new(None),
+            client: Mutex::new(None),
             plans: Mutex::new(HashMap::new()),
             undos: Mutex::new(HashMap::new()),
             tool_router: Self::tool_router(),
         })
+    }
+
+    /// The session, opening it if this is the first call.
+    ///
+    /// Every failure to open — not registered, no approved policy, another
+    /// process holding the lock — reaches the caller as a tool error with its
+    /// code and its hint, rather than as a server that never appeared.
+    async fn session(
+        &self,
+    ) -> std::result::Result<tokio::sync::MappedMutexGuard<'_, WriteSession>, ErrorData> {
+        let mut slot = self.session.lock().await;
+        if slot.is_none() {
+            let mut session =
+                WriteSession::open(&self.root).map_err(|error| to_mcp_error(&error))?;
+            if let Some((name, can_ask)) = self.client.lock().expect("client lock").clone() {
+                session.note_client(name, can_ask);
+            }
+            *slot = Some(session);
+        }
+        Ok(tokio::sync::MutexGuard::map(slot, |slot| {
+            slot.as_mut().expect("opened just above")
+        }))
     }
 
     #[tool(
@@ -85,7 +121,7 @@ impl SafeScope {
     ) -> std::result::Result<Json<PreparedPlan>, ErrorData> {
         let change = to_change_request(&request).map_err(|error| to_mcp_error(&error))?;
 
-        let session = self.session.lock().await;
+        let session = self.session().await?;
         let plan = session
             .plan(&change)
             .map_err(|error| to_mcp_error(&error))?;
@@ -130,7 +166,7 @@ impl SafeScope {
             .map(|text| idempotency_key(text, &plan))
             .transpose()?;
 
-        let mut session = self.session.lock().await;
+        let mut session = self.session().await?;
         let record = session
             .apply(&plan, key)
             .map_err(|error| to_mcp_error(&error))?;
@@ -175,7 +211,7 @@ impl SafeScope {
         // The lock is held across the question, which can take as long as a
         // person takes. That is deliberate: the session's view of the policy and
         // the budget has to still be true when the answer arrives.
-        let mut session = self.session.lock().await;
+        let mut session = self.session().await?;
         let grant = approval::request_expansion(&context.peer, &mut session, &expansion)
             .await
             .map_err(|error| to_mcp_error(&error))?;
@@ -209,7 +245,7 @@ impl SafeScope {
         &self,
         Parameters(_): Parameters<NoArguments>,
     ) -> std::result::Result<Json<Status>, ErrorData> {
-        let session = self.session.lock().await;
+        let session = self.session().await?;
         let status = session.status().map_err(|error| to_mcp_error(&error))?;
         Ok(Json(Status::of(
             &status,
@@ -226,7 +262,7 @@ impl SafeScope {
         &self,
         Parameters(query): Parameters<HistoryQuery>,
     ) -> std::result::Result<Json<Vec<HistoryEntry>>, ErrorData> {
-        let session = self.session.lock().await;
+        let session = self.session().await?;
         let mut history = session
             .journal()
             .history(session.task())
@@ -247,7 +283,7 @@ impl SafeScope {
         &self,
         Parameters(_): Parameters<NoArguments>,
     ) -> std::result::Result<Json<PreparedUndo>, ErrorData> {
-        let session = self.session.lock().await;
+        let session = self.session().await?;
         let undo = session
             .prepare_undo()
             .map_err(|error| to_mcp_error(&error))?;
@@ -290,7 +326,7 @@ impl SafeScope {
             .cloned()
             .ok_or_else(|| unknown_plan(&request.plan_id))?;
 
-        let mut session = self.session.lock().await;
+        let mut session = self.session().await?;
         let record = session
             .apply_undo(&undo)
             .map_err(|error| to_mcp_error(&error))?;
@@ -331,8 +367,16 @@ impl ServerHandler for SafeScope {
         let supports_elicitation = request.capabilities.elicitation.is_some();
         let client = request.client_info.name.clone();
         async move {
-            let mut session = self.session.lock().await;
-            session.note_client(client, supports_elicitation);
+            // Recorded even if the workspace cannot be opened, so it is in place
+            // when it can be. Initialize must not fail over a workspace the
+            // person may be about to set up.
+            *self.client.lock().expect("client lock") = Some((client, supports_elicitation));
+            if let Ok(mut session) = self.session().await {
+                let recorded = self.client.lock().expect("client lock").clone();
+                if let Some((name, can_ask)) = recorded {
+                    session.note_client(name, can_ask);
+                }
+            }
             Ok(self.get_info())
         }
     }
