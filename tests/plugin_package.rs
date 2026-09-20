@@ -28,25 +28,37 @@ fn read_json(relative: &str) -> Value {
 
 /// The argv a manifest asks for, with the plugin root standing in for the
 /// binary the build script installs there.
+/// Assembles an entry the way the host does: `command` is the executable and
+/// `args` are its arguments.
+///
+/// Reading `args` alone once hid a manifest that named the binary in `args[0]`
+/// and left `command` out. The host requires `command`, so it never ran the
+/// hook at all — while this test, which built the argv itself, went on passing.
 fn argv(entry: &Value, workspace: &Path) -> Vec<String> {
-    entry["args"]
-        .as_array()
-        .expect("args")
-        .iter()
-        .map(|argument| {
-            argument
-                .as_str()
-                .expect("argument")
-                .replace("${CLAUDE_PLUGIN_ROOT}/bin/safescope", BINARY)
-                .replace("${CLAUDE_PROJECT_DIR}", &workspace.to_string_lossy())
-        })
+    let expand = |text: &str| {
+        text.replace("${CLAUDE_PLUGIN_ROOT}/bin/safescope", BINARY)
+            .replace("${CLAUDE_PROJECT_DIR}", &workspace.to_string_lossy())
+    };
+    let command = entry["command"]
+        .as_str()
+        .expect("every command entry needs a `command`: the host will not run one without it");
+    std::iter::once(expand(command))
+        .chain(
+            entry["args"]
+                .as_array()
+                .into_iter()
+                .flatten()
+                .map(|argument| expand(argument.as_str().expect("argument"))),
+        )
         .collect()
 }
 
 /// Runs a JSON-RPC conversation against the server and returns its replies.
 fn converse(command: &[String], cwd: &Path, requests: &[Value]) -> Vec<Value> {
-    let mut child = Command::new(BINARY)
-        .args(command)
+    // The manifest's own `command`, not a hardcoded path: naming the executable
+    // is part of what is under test.
+    let mut child = Command::new(&command[0])
+        .args(&command[1..])
         .current_dir(cwd)
         .env("SAFESCOPE_LANG", "en")
         .stdin(Stdio::piped())
@@ -192,6 +204,21 @@ fn the_hook_manifest_covers_the_edit_tools_and_the_session() {
 
     assert!(events.contains_key("SessionStart"));
     assert!(events.contains_key("Stop"));
+
+    // Every entry names its executable in `command`. A manifest that puts it in
+    // `args[0]` and omits `command` parses, validates and does nothing: the host
+    // skips the entry silently, so the hook that is supposed to be the first
+    // line of the report never runs.
+    for (event, groups) in events {
+        for group in groups.as_array().expect("groups") {
+            for entry in group["hooks"].as_array().expect("hooks") {
+                assert!(
+                    entry["command"].is_string(),
+                    "{event}: a command hook without `command` is never run"
+                );
+            }
+        }
+    }
 }
 
 #[test]
