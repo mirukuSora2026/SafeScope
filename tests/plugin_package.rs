@@ -188,19 +188,17 @@ fn the_hook_manifest_covers_the_edit_tools_and_the_session() {
     let hooks = read_json("hooks/hooks.json");
     let events = hooks["hooks"].as_object().expect("hooks");
 
-    // Bash is deliberately absent: a shell command cannot be read reliably
-    // enough to judge, and a check that looked like protection without being it
-    // would be worse than none.
+    // Every tool, so the hook decides with the policy in front of it rather than
+    // the manifest deciding for it. Naming the edit tools here meant the hook
+    // never saw the routes an agent actually took when they were denied.
+    //
+    // Seeing Bash is still not judging Bash: the hook says nothing about a shell
+    // command in the default mode, and refuses one under an allowlist by not
+    // finding it on the list, never by reading it.
     let matcher = events["PreToolUse"][0]["matcher"]
         .as_str()
         .expect("matcher");
-    for tool in ["Write", "Edit", "MultiEdit", "NotebookEdit"] {
-        assert!(matcher.contains(tool), "{matcher} does not cover {tool}");
-    }
-    assert!(
-        !matcher.contains("Bash"),
-        "{matcher} should not claim to judge Bash"
-    );
+    assert_eq!(matcher, "*", "the hook should be offered every tool call");
 
     assert!(events.contains_key("SessionStart"));
     assert!(events.contains_key("Stop"));

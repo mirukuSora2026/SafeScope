@@ -53,17 +53,29 @@ impl WorkspaceLock {
         // sitting at a prompt, and a person should be told rather than hung.
         // Another session holding the lock is a condition of the environment,
         // not a rule saying no — and unlike a denial, retrying it is meaningful.
-        flock(&file, FlockOperation::NonBlockingLockExclusive).map_err(|_| {
-            Error::Faulted(
-                Fault::new(
-                    ErrorCode::WorkspaceBusy,
-                    Msg::WorkspaceBusyElsewhere {
-                        path: path.display().to_string(),
-                    },
-                )
-                .with_hint(Msg::HintAnotherSessionIsWriting),
-            )
-        })?;
+        //
+        // Only EWOULDBLOCK means somebody else has it. Reporting every errno as
+        // a busy workspace once made a signal arriving mid-call — EINTR, which
+        // says nothing about the lock — look like a second session, and the
+        // advice that came with it was to close a session that did not exist.
+        loop {
+            match flock(&file, FlockOperation::NonBlockingLockExclusive) {
+                Ok(()) => break,
+                Err(rustix::io::Errno::INTR) => continue,
+                Err(rustix::io::Errno::WOULDBLOCK) => {
+                    return Err(Error::Faulted(
+                        Fault::new(
+                            ErrorCode::WorkspaceBusy,
+                            Msg::WorkspaceBusyElsewhere {
+                                path: path.display().to_string(),
+                            },
+                        )
+                        .with_hint(Msg::HintAnotherSessionIsWriting),
+                    ));
+                }
+                Err(errno) => return Err(write_failed(path, &std::io::Error::from(errno))),
+            }
+        }
 
         Ok(Self {
             _file: file,

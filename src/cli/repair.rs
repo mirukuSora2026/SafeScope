@@ -60,6 +60,33 @@ pub fn recover(workspace: &Path) -> Result<i32> {
 }
 
 /// Reverses the most recent completed operation.
+/// Adopts the workspace as it stands as the new drift baseline.
+///
+/// Takes the lock, because it writes. Reported by name rather than by count:
+/// accepting a change silently is how a person ends up having approved one they
+/// never saw.
+pub fn accept_drift(workspace: &Path) -> Result<i32> {
+    let session = WriteSession::open(workspace)?;
+    if let Some(survey) = session.drift()? {
+        for entry in &survey.entries {
+            println!("  {}", entry.path.as_str());
+        }
+    }
+    session.accept_drift()?;
+
+    // Surveyed again rather than assumed: the count reported is one that was
+    // measured against the baseline that was just written.
+    if let Some(survey) = session.drift()? {
+        println!(
+            "{}",
+            Msg::DriftClean {
+                scanned: survey.scanned
+            }
+        );
+    }
+    Ok(crate::cli::exit::OK)
+}
+
 pub fn undo(workspace: &Path) -> Result<i32> {
     let mut session = WriteSession::open(workspace)?;
     let plan = session.prepare_undo()?;

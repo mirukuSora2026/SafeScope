@@ -9,6 +9,7 @@
 //! policy or journal record is worse than none, because the engine would read it
 //! and believe it.
 
+pub mod baseline_store;
 pub mod content;
 pub mod grant_store;
 pub mod lock;
@@ -115,6 +116,11 @@ impl StatePaths {
     /// The advisory lock guarding single-writer access.
     pub fn lock(&self) -> PathBuf {
         self.root.join("lock")
+    }
+
+    /// The workspace as it stood when work started, for drift detection.
+    pub fn baseline(&self) -> PathBuf {
+        self.root.join("baseline.json")
     }
 
     /// Creates the directories that must exist before anything is written.

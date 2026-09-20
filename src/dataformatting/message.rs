@@ -51,6 +51,11 @@ pub enum Label {
     Checks,
     Passed,
     Failed,
+    ChangedOutside,
+    NoBaseline,
+    DriftAdded,
+    DriftModified,
+    DriftRemoved,
 }
 
 /// A message that can be shown to a person.
@@ -193,6 +198,30 @@ pub enum Msg {
         count: usize,
     },
     HookPolicyEdited,
+    /// Files changed without going through the engine.
+    HookChangedOutside {
+        count: usize,
+    },
+    /// A tool the allowlist does not name, refused before it ran.
+    HookToolNotAllowed {
+        tool: String,
+    },
+
+    // ── Drift ──────────────────────────────────────────────────────────
+    DriftNoBaseline,
+    DriftClean {
+        scanned: usize,
+    },
+    DriftUnrecoverable {
+        count: usize,
+    },
+    DriftTruncated {
+        scanned: usize,
+    },
+    HintReviewDrift,
+    HintAllowlistMode {
+        allowed: String,
+    },
 
     // ── Recovery reporting ─────────────────────────────────────────────
     RecoveryFoundNothing,

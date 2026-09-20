@@ -98,6 +98,11 @@ pub(super) fn render(msg: &Msg) -> String {
             Label::Checks => "점검",
             Label::Passed => "정상",
             Label::Failed => "실패",
+            Label::ChangedOutside => "SafeScope 밖에서 바뀐 것",
+            Label::NoBaseline => "기준 상태 없음",
+            Label::DriftAdded => "추가됨",
+            Label::DriftModified => "변경됨",
+            Label::DriftRemoved => "삭제됨",
         }
         .to_owned(),
         Msg::WorkspaceAlreadyRegistered { root } => {
@@ -192,6 +197,30 @@ SafeScope 는 이 도구들을 거친 변경만 압니다. 셸 명령이 쓴 것
         Msg::HookPolicyEdited => "SafeScope 정책 파일이 수정됐지만 승인되지 않아 적용되지 \
 않았습니다. 의도한 변경이라면 `safescope policy approve` 를 실행하세요."
             .to_owned(),
+        Msg::HookChangedOutside { count } => format!(
+            "파일 {count}개가 SafeScope를 거치지 않고 바뀌었습니다. 이전 내용이 저장되지 \
+             않아 되돌릴 수 없습니다. `safescope status`로 어떤 파일인지 확인하세요."
+        ),
+        Msg::HookToolNotAllowed { tool } => format!(
+            "승인된 정책이 SafeScope를 허용 목록 모드로 실행 중이며 `{tool}`은(는) 목록에 \
+             없습니다. 변경이 기록되도록 SafeScope를 통해 파일을 바꾸세요."
+        ),
+        Msg::DriftNoBaseline => {
+            "기준 상태를 기록한 적이 없어 무엇이 밖에서 바뀌었는지 말할 수 없습니다.".to_owned()
+        }
+        Msg::DriftClean { scanned } => {
+            format!("SafeScope 밖에서 바뀐 것은 없습니다 (파일 {scanned}개 확인).")
+        }
+        Msg::DriftUnrecoverable { count } => {
+            format!("이 중 {count}개는 이전 내용이 저장되어 있지 않아 되돌릴 수 없습니다.")
+        }
+        Msg::DriftTruncated { scanned } => {
+            format!("파일 {scanned}개까지만 확인했으므로 이 목록은 완전하지 않을 수 있습니다.")
+        }
+        Msg::HintReviewDrift => {
+            "확인한 뒤 `safescope drift accept`로 현재 상태를 새 기준으로 삼으세요.".to_owned()
+        }
+        Msg::HintAllowlistMode { allowed } => format!("정책이 허용하는 도구: {allowed}"),
         Msg::RecoveryFoundNothing => "복구할 것이 없었습니다.".to_owned(),
         Msg::RecoverySettled { aborted, committed } => {
             format!("실행된 연산 {committed}건과 실행되지 않은 {aborted}건을 확정했습니다.")

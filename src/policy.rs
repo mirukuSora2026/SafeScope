@@ -18,10 +18,12 @@ pub use self::evaluate::{
     Authority, Decision, EvaluationContext, MoveDecision, RuleRef, RuleSource, evaluate,
     evaluate_move,
 };
-pub use self::file::{PolicyDocument, PolicyFile};
+pub use self::file::{EnforcementMode, PolicyDocument, PolicyFile};
 pub use self::grant::{ApprovalSource, Grant};
 pub use self::matcher::{CaseSensitivity, Pattern, PatternSet};
-pub use self::normalized::{AllowEntry, BudgetLimits, CompiledPolicy, DenyEntry, NormalizedPolicy};
+pub use self::normalized::{
+    AllowEntry, BudgetLimits, CompiledPolicy, DenyEntry, EnforcementSettings, NormalizedPolicy,
+};
 pub use self::protected::{ProtectedMatch, ProtectedPaths, ProtectedReason};
 pub use self::validate::{Diagnostic, Severity, ValidationReport, validate};
 

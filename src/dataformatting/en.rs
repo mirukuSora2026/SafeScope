@@ -98,6 +98,11 @@ pub(super) fn render(msg: &Msg) -> String {
             Label::Checks => "Checks",
             Label::Passed => "ok",
             Label::Failed => "FAILED",
+            Label::ChangedOutside => "Changed outside SafeScope",
+            Label::NoBaseline => "no baseline",
+            Label::DriftAdded => "added",
+            Label::DriftModified => "changed",
+            Label::DriftRemoved => "removed",
         }
         .to_owned(),
         Msg::WorkspaceAlreadyRegistered { root } => {
@@ -192,6 +197,31 @@ written by a shell command or another tool are not covered and cannot be undone 
         Msg::HookPolicyEdited => "The SafeScope policy file has been edited but not approved, \
 so the change is not in force. Run `safescope policy approve` if it was meant to be."
             .to_owned(),
+        Msg::HookChangedOutside { count } => format!(
+            "{count} file(s) changed without going through SafeScope, so they have no \
+             snapshot and cannot be undone. Run `safescope status` to see which."
+        ),
+        Msg::HookToolNotAllowed { tool } => format!(
+            "The approved policy runs SafeScope in allowlist mode, and `{tool}` is not on \
+             the list. Change files through SafeScope so the change is recorded."
+        ),
+        Msg::DriftNoBaseline => {
+            "No baseline has been taken, so SafeScope cannot say what changed around it.".to_owned()
+        }
+        Msg::DriftClean { scanned } => {
+            format!("Nothing changed outside SafeScope ({scanned} file(s) checked).")
+        }
+        Msg::DriftUnrecoverable { count } => format!(
+            "{count} of these have no stored previous contents. SafeScope cannot undo them."
+        ),
+        Msg::DriftTruncated { scanned } => {
+            format!("Only the first {scanned} files were checked, so this list may be incomplete.")
+        }
+        Msg::HintReviewDrift => {
+            "Review these, then run `safescope drift accept` to adopt them as the new baseline."
+                .to_owned()
+        }
+        Msg::HintAllowlistMode { allowed } => format!("Tools the policy allows: {allowed}"),
         Msg::RecoveryFoundNothing => "Nothing needed recovering.".to_owned(),
         Msg::RecoverySettled { aborted, committed } => {
             format!("Settled {committed} operation(s) that had run and {aborted} that had not.")

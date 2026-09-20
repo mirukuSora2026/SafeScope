@@ -279,6 +279,20 @@ impl Journal {
         )
     }
 
+    /// Every state this engine observed after a change it made, oldest first.
+    ///
+    /// What drift detection needs in order to tell its own work apart from
+    /// somebody else's: a file matching one of these was put there by SafeScope,
+    /// whatever the baseline says.
+    pub fn observed_states(&self) -> Result<Vec<PathState>> {
+        Ok(self
+            .query_many("WHERE stage = 'committed' ORDER BY sequence", params![])?
+            .into_iter()
+            .filter_map(|record| record.observed)
+            .flatten()
+            .collect())
+    }
+
     /// The most recent operation that could be undone.
     ///
     /// Undo walks backwards, so this is the only one eligible: reversing an

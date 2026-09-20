@@ -14,7 +14,7 @@ use crate::domain::{OpSet, Operation};
 use crate::error::Denial;
 
 use super::defaults::SCHEMA_VERSION;
-use super::file::{ConflictAction, ExpansionPolicy, PolicyDocument};
+use super::file::{ConflictAction, EnforcementMode, ExpansionPolicy, PolicyDocument};
 use super::matcher::{CaseSensitivity, Pattern, PatternSet};
 use super::protected::ProtectedPaths;
 
@@ -68,6 +68,14 @@ pub struct SafetySettings {
     pub unsafe_allow_workspace_wide: bool,
 }
 
+/// What the hook refuses, and what it lets past.
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub struct EnforcementSettings {
+    pub mode: EnforcementMode,
+    /// Tools permitted beyond the built-in read-only set, sorted and deduplicated.
+    pub allow_tools: Vec<String>,
+}
+
 /// What happens when undo meets a later change.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub struct RecoverySettings {
@@ -86,6 +94,8 @@ pub struct NormalizedPolicy {
     pub approval: ApprovalSettings,
     pub safety: SafetySettings,
     pub recovery: RecoverySettings,
+    #[serde(default)]
+    pub enforcement: EnforcementSettings,
 }
 
 impl NormalizedPolicy {
@@ -163,6 +173,21 @@ impl NormalizedPolicy {
                 create_parent_directories: file.safety.create_parent_directories,
                 workspace_writer_limit: file.safety.workspace_writer_limit,
                 unsafe_allow_workspace_wide: file.safety.unsafe_allow_workspace_wide,
+            },
+            enforcement: EnforcementSettings {
+                mode: file.enforcement.mode,
+                allow_tools: {
+                    let mut tools: Vec<String> = file
+                        .enforcement
+                        .allow_tools
+                        .iter()
+                        .map(|tool| tool.get_ref().trim().to_owned())
+                        .filter(|tool| !tool.is_empty())
+                        .collect();
+                    tools.sort();
+                    tools.dedup();
+                    tools
+                },
             },
             recovery: RecoverySettings {
                 conflict_action: file.recovery.conflict_action,
@@ -254,6 +279,10 @@ impl CompiledPolicy {
 
     pub const fn safety(&self) -> &SafetySettings {
         &self.normalized.safety
+    }
+
+    pub const fn enforcement(&self) -> &EnforcementSettings {
+        &self.normalized.enforcement
     }
 
     pub const fn recovery(&self) -> &RecoverySettings {

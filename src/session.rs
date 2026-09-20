@@ -18,6 +18,7 @@ use std::path::Path;
 
 use crate::budget::{Budget, BudgetUsage};
 use crate::dataformatting::Msg;
+use crate::drift::{self, Baseline, Survey};
 use crate::error::{Denial, Error, ErrorCode, Result};
 use crate::executor::{Executor, RequestKey};
 use crate::ids::TaskId;
@@ -29,6 +30,7 @@ use crate::policy::{
 };
 use crate::recovery::{Recovery, RecoveryReport};
 use crate::registry::{self, Registration};
+use crate::store::baseline_store::BaselineStore;
 use crate::store::content::ContentStore;
 use crate::store::grant_store::GrantStore;
 use crate::store::lock::WorkspaceLock;
@@ -49,6 +51,7 @@ pub struct WriteSession {
     snapshots: ContentStore,
     staging: ContentStore,
     tasks: TaskStore,
+    baselines: BaselineStore,
     task: TaskId,
     grants: GrantStore,
     client: Option<ConnectedClient>,
@@ -101,7 +104,21 @@ impl WriteSession {
         })?;
 
         let tasks = TaskStore::new(&paths);
-        let task = tasks.current_or_start()?;
+        let baselines = BaselineStore::new(&paths);
+
+        // A baseline is taken when a task begins and not on every open. Opening
+        // a session is something that happens constantly — every CLI command,
+        // every MCP connection — and recapturing here would adopt whatever had
+        // been changed in the meantime as the new normal, which is exactly the
+        // evidence drift detection exists to keep.
+        let task = match tasks.current()? {
+            Some(task) => task,
+            None => {
+                let task = tasks.start()?;
+                baselines.store(&Baseline::capture(root))?;
+                task
+            }
+        };
 
         Ok(Self {
             _lock: lock,
@@ -112,6 +129,7 @@ impl WriteSession {
             snapshots: ContentStore::snapshots(&paths),
             staging: ContentStore::staging(&paths),
             tasks,
+            baselines,
             task,
             grants: GrantStore::new(&paths),
             client: None,
@@ -243,6 +261,32 @@ impl WriteSession {
             journal: &mut self.journal,
         }
         .run()
+    }
+
+    /// What changed in this workspace without going through the engine.
+    ///
+    /// `None` when no baseline was ever taken — a workspace that never started
+    /// a task cannot say that nothing drifted, only that it does not know.
+    pub fn drift(&self) -> Result<Option<Survey>> {
+        let Some(baseline) = self.baselines.current()? else {
+            return Ok(None);
+        };
+        let recorded = self.journal.observed_states()?;
+        Ok(Some(drift::survey(
+            self.registration.root(),
+            &baseline,
+            &recorded,
+        )))
+    }
+
+    /// Adopts the workspace as it stands as the new baseline.
+    ///
+    /// What a person does after reviewing drift and deciding to keep it. It is
+    /// deliberately explicit: anything outstanding stops being reported, so it
+    /// is never done on the engine's own initiative.
+    pub fn accept_drift(&self) -> Result<()> {
+        self.baselines
+            .store(&Baseline::capture(self.registration.root()))
     }
 
     /// What this session can say about itself.

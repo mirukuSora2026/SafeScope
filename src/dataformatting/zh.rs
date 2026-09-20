@@ -92,6 +92,11 @@ pub(super) fn render(msg: &Msg) -> String {
             Label::Checks => "检查",
             Label::Passed => "正常",
             Label::Failed => "失败",
+            Label::ChangedOutside => "在 SafeScope 之外被更改",
+            Label::NoBaseline => "无基准",
+            Label::DriftAdded => "新增",
+            Label::DriftModified => "更改",
+            Label::DriftRemoved => "删除",
         }
         .to_owned(),
         Msg::WorkspaceAlreadyRegistered { root } => {
@@ -180,6 +185,30 @@ SafeScope 只了解经由这些工具所做的更改。由 shell 命令写入的
         Msg::HookPolicyEdited => "SafeScope 策略文件已修改但未批准，因此更改尚未生效。\
 如果确属有意，请运行 `safescope policy approve`。"
             .to_owned(),
+        Msg::HookChangedOutside { count } => format!(
+            "有 {count} 个文件未经 SafeScope 而被更改，因此没有快照，无法撤销。\
+             运行 `safescope status` 查看是哪些文件。"
+        ),
+        Msg::HookToolNotAllowed { tool } => format!(
+            "已批准的策略让 SafeScope 运行在允许列表模式，而 `{tool}` 不在列表中。\
+             请通过 SafeScope 修改文件，以便更改被记录。"
+        ),
+        Msg::DriftNoBaseline => {
+            "尚未记录基准状态，SafeScope 无法说明在它之外发生了什么更改。".to_owned()
+        }
+        Msg::DriftClean { scanned } => {
+            format!("没有在 SafeScope 之外发生的更改（已检查 {scanned} 个文件）。")
+        }
+        Msg::DriftUnrecoverable { count } => {
+            format!("其中 {count} 个没有保存先前内容，SafeScope 无法撤销。")
+        }
+        Msg::DriftTruncated { scanned } => {
+            format!("仅检查了前 {scanned} 个文件，此列表可能并不完整。")
+        }
+        Msg::HintReviewDrift => {
+            "检查之后，运行 `safescope drift accept` 将当前状态作为新的基准。".to_owned()
+        }
+        Msg::HintAllowlistMode { allowed } => format!("策略允许的工具：{allowed}"),
         Msg::RecoveryFoundNothing => "没有需要恢复的内容。".to_owned(),
         Msg::RecoverySettled { aborted, committed } => {
             format!("已确定 {committed} 个已执行的操作和 {aborted} 个未执行的操作。")

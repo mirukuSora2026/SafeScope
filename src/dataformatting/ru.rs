@@ -98,6 +98,11 @@ pub(super) fn render(msg: &Msg) -> String {
             Label::Checks => "Проверки",
             Label::Passed => "ок",
             Label::Failed => "СБОЙ",
+            Label::ChangedOutside => "Изменено в обход SafeScope",
+            Label::NoBaseline => "нет базового состояния",
+            Label::DriftAdded => "добавлено",
+            Label::DriftModified => "изменено",
+            Label::DriftRemoved => "удалено",
         }
         .to_owned(),
         Msg::WorkspaceAlreadyRegistered { root } => {
@@ -194,6 +199,36 @@ SafeScope знает только об изменениях, сделанных 
         Msg::HookPolicyEdited => "Файл политики SafeScope изменён, но не утверждён, поэтому \
 изменение не действует. Если оно задумано, выполните `safescope policy approve`."
             .to_owned(),
+        Msg::HookChangedOutside { count } => format!(
+            "Файлов изменено в обход SafeScope: {count}. Прежнее содержимое не сохранено, \
+             отменить изменения нельзя. Выполните `safescope status`, чтобы увидеть какие."
+        ),
+        Msg::HookToolNotAllowed { tool } => format!(
+            "Утверждённая политика запускает SafeScope в режиме списка разрешений, а `{tool}` \
+             в списке нет. Меняйте файлы через SafeScope, чтобы изменение было записано."
+        ),
+        Msg::DriftNoBaseline => {
+            "Базовое состояние не записывалось, поэтому SafeScope не может сказать, \
+что изменилось помимо него."
+                .to_owned()
+        }
+        Msg::DriftClean { scanned } => {
+            format!("Ничего не изменено в обход SafeScope (проверено файлов: {scanned}).")
+        }
+        Msg::DriftUnrecoverable { count } => format!(
+            "Из них {count} не имеют сохранённого прежнего содержимого. SafeScope не может их отменить."
+        ),
+        Msg::DriftTruncated { scanned } => {
+            format!("Проверены только первые {scanned} файлов, поэтому список может быть неполным.")
+        }
+        Msg::HintReviewDrift => {
+            "Просмотрите их, затем выполните `safescope drift accept`, чтобы принять \
+текущее состояние как новое базовое."
+                .to_owned()
+        }
+        Msg::HintAllowlistMode { allowed } => {
+            format!("Инструменты, разрешённые политикой: {allowed}")
+        }
         Msg::RecoveryFoundNothing => "Восстанавливать было нечего.".to_owned(),
         Msg::RecoverySettled { aborted, committed } => {
             format!("Разрешено операций: выполненных — {committed}, невыполненных — {aborted}.")

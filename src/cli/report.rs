@@ -10,12 +10,16 @@
 use std::path::Path;
 
 use crate::dataformatting::{self, Label, Msg, pad};
+use crate::drift::Change;
 use crate::error::Result;
 use crate::inspect::Inspector;
 use crate::journal::OperationRecord;
 
 /// Terminal cells reserved for a row label.
 const LABEL_WIDTH: usize = 22;
+
+/// Width of the added/changed/removed marker in a drift listing.
+const CHANGE_WIDTH: usize = 10;
 /// Default number of history entries.
 const DEFAULT_HISTORY: usize = 20;
 
@@ -89,6 +93,7 @@ pub fn status(workspace: &Path) -> Result<i32> {
     println!();
     heading(Label::Coverage);
     println!("  {}", Msg::McpCoverageNotice);
+    report_drift(&inspector)?;
 
     // An unsettled workspace is not a healthy one, and the exit code says so.
     Ok(if status.is_settled() {
@@ -158,6 +163,74 @@ pub fn doctor(workspace: &Path) -> Result<i32> {
     } else {
         crate::cli::exit::DENIED
     })
+}
+
+/// Reports drift on its own, for somebody who only wants that question answered.
+///
+/// Exits non-zero when something changed outside, so a script can act on it.
+pub fn drift(workspace: &Path) -> Result<i32> {
+    let inspector = Inspector::open(workspace)?;
+    let clean = inspector.drift()?.is_none_or(|survey| survey.is_clean());
+    report_drift(&inspector)?;
+    Ok(if clean {
+        crate::cli::exit::OK
+    } else {
+        crate::cli::exit::DENIED
+    })
+}
+
+/// Names the files that changed without the engine.
+///
+/// Printed under Coverage because it is the same subject: the notice says what
+/// is not covered in general, and this says what was not covered here. A clean
+/// survey is reported too — listing only the bad news reads as a clean bill of
+/// health for everything that was never looked at.
+fn report_drift(inspector: &Inspector) -> Result<()> {
+    let Some(survey) = inspector.drift()? else {
+        println!("  {}", Msg::DriftNoBaseline);
+        return Ok(());
+    };
+
+    if survey.is_clean() {
+        println!(
+            "  {}",
+            Msg::DriftClean {
+                scanned: survey.scanned
+            }
+        );
+        return Ok(());
+    }
+
+    println!();
+    heading(Label::ChangedOutside);
+    for entry in &survey.entries {
+        let marker = match entry.change {
+            Change::Added => Label::DriftAdded,
+            Change::Modified => Label::DriftModified,
+            Change::Removed => Label::DriftRemoved,
+        };
+        println!(
+            "  {} {}",
+            pad(&Msg::Label(marker).to_string(), CHANGE_WIDTH),
+            entry.path.as_str()
+        );
+    }
+    println!(
+        "  {}",
+        Msg::DriftUnrecoverable {
+            count: survey.entries.len()
+        }
+    );
+    if survey.truncated {
+        println!(
+            "  {}",
+            Msg::DriftTruncated {
+                scanned: survey.scanned
+            }
+        );
+    }
+    println!("  {}", Msg::HintReviewDrift);
+    Ok(())
 }
 
 fn heading(label: Label) {

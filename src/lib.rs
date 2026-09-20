@@ -24,6 +24,7 @@ pub mod budget;
 pub mod cli;
 pub mod dataformatting;
 pub mod domain;
+pub mod drift;
 pub mod error;
 pub mod executor;
 pub mod fault;

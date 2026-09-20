@@ -9,7 +9,19 @@
 //!   produce a check that looks like protection and is not.
 //! - Anything else is left alone.
 //!
-//! **A hook is not the boundary.** Per the host's documented behaviour, a hook
+//! The manifest matches every tool rather than just the edit tools, because a
+//! narrow matcher decides in the manifest what this file should decide with the
+//! policy in front of it. Seeing `Bash` is not the same as judging it: in the
+//! default mode this still says nothing about one.
+//!
+//! A policy may instead ask for `mode = "allowlist"`, which refuses every tool
+//! not named — including `Bash`, not by reading the command but by not being on
+//! the list. That was measured to be the only form of denial that holds: given a
+//! list of forbidden tools the agent moves to one that is not on it, and the set
+//! of tools that can run a command is not knowable in advance. An allowlist has
+//! no such gap, and costs the agent the ability to run anything at all.
+//!
+//! **A hook is not the boundary, and the allowlist does not change that.** Per the host's documented behaviour, a hook
 //! that fails with any exit code other than 0 or 2 is non-blocking and the tool
 //! call proceeds; a disabled hook never runs at all. So every check here is also
 //! performed inside the engine. This exists to catch a mistake early and say
@@ -28,7 +40,7 @@ use crate::domain::Operation;
 use crate::error::{Error, Result};
 use crate::inspect::Inspector;
 use crate::paths::RelPath;
-use crate::policy::{Authority, CompiledPolicy, EvaluationContext, evaluate};
+use crate::policy::{Authority, CompiledPolicy, EnforcementMode, EvaluationContext, evaluate};
 use crate::registry;
 use crate::store::policy_store::PolicyStore;
 
@@ -153,24 +165,85 @@ fn concerns(input: &HookInput) -> Option<Vec<String>> {
     (!notes.is_empty()).then(|| notes.iter().map(ToString::to_string).collect())
 }
 
+/// Tools the allowlist permits without being named in a policy.
+///
+/// Reading, searching and asking questions: everything here leaves the
+/// workspace as it found it. `ToolSearch` is on it because SafeScope's own MCP
+/// tools may be deferred in a tool-heavy session, and an agent that cannot
+/// search for them cannot reach the audited path either.
+///
+/// Deliberately absent: `Bash`, and the tools that hand work to something
+/// holding its own — `Agent`, `Task`, `Skill`, `Monitor`. Those were the four
+/// routes the agent actually took when the edit tools were denied.
+const READ_ONLY_TOOLS: [&str; 8] = [
+    "Read",
+    "Glob",
+    "Grep",
+    "LS",
+    "NotebookRead",
+    "ToolSearch",
+    "TodoWrite",
+    "ExitPlanMode",
+];
+
+/// Whether a tool reaches SafeScope's own audited path.
+fn is_safescope_tool(tool: &str) -> bool {
+    tool.starts_with("mcp__safescope__")
+}
+
+/// Whether the allowlist admits this tool.
+fn allowed_by_list(tool: &str, extra: &[String]) -> bool {
+    is_safescope_tool(tool)
+        || READ_ONLY_TOOLS.contains(&tool)
+        || extra.iter().any(|allowed| allowed == tool)
+}
+
 /// The refusal reason, or `None` to say nothing.
 ///
 /// Saying nothing is the common case and the right default: it leaves the host's
 /// normal permission flow in charge. An explicit `allow` would quietly waive
 /// whatever else the user had configured.
 fn decide(input: &HookInput) -> Option<String> {
-    let absolute = target_path(&input.tool_name, &input.tool_input)?;
     let cwd = input.cwd.as_ref().map(PathBuf::from)?;
     let root = workspace_root(&cwd)?;
+    let registration = registry::load(&root).ok()?;
+    let store = PolicyStore::new(&registration.state_paths().ok()?);
 
+    let approved = store.current().ok()?;
+
+    // The allowlist, when a policy asks for one. Checked before the path, because
+    // the tools it exists to refuse are the ones that have no path to check.
+    if let Some(approved) = &approved
+        && approved.policy.enforcement.mode == EnforcementMode::Allowlist
+        && !allowed_by_list(&input.tool_name, &approved.policy.enforcement.allow_tools)
+    {
+        let mut allowed: Vec<&str> = READ_ONLY_TOOLS.to_vec();
+        allowed.push("mcp__safescope__*");
+        let extra: Vec<&str> = approved
+            .policy
+            .enforcement
+            .allow_tools
+            .iter()
+            .map(String::as_str)
+            .collect();
+        allowed.extend(extra);
+        return Some(format!(
+            "{}\n{}",
+            Msg::HookToolNotAllowed {
+                tool: input.tool_name.clone(),
+            },
+            Msg::HintAllowlistMode {
+                allowed: allowed.join(", "),
+            }
+        ));
+    }
+
+    let absolute = target_path(&input.tool_name, &input.tool_input)?;
     let relative = absolute.strip_prefix(&root).ok()?;
     // Outside the workspace, SafeScope has nothing to say.
     let path = RelPath::parse(&relative.to_string_lossy()).ok()?;
 
-    let registration = registry::load(&root).ok()?;
-    let store = PolicyStore::new(&registration.state_paths().ok()?);
-
-    let Some(approved) = store.current().ok()? else {
+    let Some(approved) = approved else {
         // Registered but never approved: nothing may be changed yet, and saying
         // so is more useful than letting the write land and be unrecorded.
         return Some(

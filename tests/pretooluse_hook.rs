@@ -287,3 +287,131 @@ fn never_exits_two() {
         assert_eq!(output.status.code(), Some(0), "{relative}");
     }
 }
+
+/// A workspace whose approved policy asks for allowlist enforcement.
+fn allowlist_workspace() -> (TempDir, TempDir) {
+    const POLICY: &str = "\
+schema_version = 1
+
+[scope]
+allow = [\"src/auth/**\"]
+
+[enforcement]
+mode = \"allowlist\"
+allow_tools = [\"WebSearch\"]
+";
+    let data = TempDir::new().expect("data");
+    let workspace = TempDir::new().expect("workspace");
+    unsafe { std::env::set_var(DATA_DIR_ENV, data.path()) };
+
+    let registration = registry::init(workspace.path()).expect("init");
+    std::fs::write(registration.policy_path(), POLICY).expect("write policy");
+    let policy = approve::check_policy(POLICY).expect("valid");
+    approve::perform(&registration, policy, POLICY).expect("approve");
+
+    std::fs::create_dir_all(workspace.path().join("src/auth")).expect("create dirs");
+    (data, workspace)
+}
+
+/// A pending call to a tool that carries no path.
+fn tool_payload(workspace: &Path, tool: &str) -> Value {
+    json!({
+        "session_id": "s",
+        "hook_event_name": "PreToolUse",
+        "cwd": workspace.to_string_lossy(),
+        "tool_name": tool,
+        "tool_input": { "command": "echo hello" },
+    })
+}
+
+/// The `permissionDecision` in a hook reply, if it made one.
+fn decision(output: &Output) -> Option<String> {
+    let reply: Value = serde_json::from_str(stdout(output).trim()).ok()?;
+    reply["hookSpecificOutput"]["permissionDecision"]
+        .as_str()
+        .map(ToOwned::to_owned)
+}
+
+#[test]
+fn the_default_mode_still_says_nothing_about_a_shell_command() {
+    // Seeing every tool is not judging every tool. The manifest now offers this
+    // hook `Bash`, and it must go on declining to read one.
+    let _guard = env_lock();
+    let (data, workspace) = approved_workspace();
+
+    let output = hook(data.path(), &tool_payload(workspace.path(), "Bash"));
+    assert_eq!(output.status.code(), Some(0));
+    assert!(stdout(&output).trim().is_empty(), "{}", stdout(&output));
+}
+
+#[test]
+fn an_allowlist_refuses_a_shell_command_without_reading_it() {
+    let _guard = env_lock();
+    let (data, workspace) = allowlist_workspace();
+
+    let output = hook(data.path(), &tool_payload(workspace.path(), "Bash"));
+    assert_eq!(output.status.code(), Some(0));
+    assert_eq!(decision(&output).as_deref(), Some("deny"));
+    assert!(
+        stdout(&output).contains("allowlist"),
+        "the reason should say why: {}",
+        stdout(&output)
+    );
+}
+
+#[test]
+fn an_allowlist_refuses_the_routes_the_agent_actually_took() {
+    // Measured, not guessed: with the edit tools denied, real sessions reached
+    // for these four in turn. Two of them succeeded in writing files.
+    let _guard = env_lock();
+    let (data, workspace) = allowlist_workspace();
+
+    for tool in ["Bash", "Monitor", "Agent", "Skill"] {
+        let output = hook(data.path(), &tool_payload(workspace.path(), tool));
+        assert_eq!(
+            decision(&output).as_deref(),
+            Some("deny"),
+            "{tool} was not refused"
+        );
+    }
+}
+
+#[test]
+fn an_allowlist_lets_reading_through() {
+    // An agent that cannot read cannot work, and an enforcement mode nobody can
+    // work under is one nobody turns on.
+    let _guard = env_lock();
+    let (data, workspace) = allowlist_workspace();
+
+    for tool in ["Read", "Glob", "Grep", "ToolSearch"] {
+        let output = hook(data.path(), &tool_payload(workspace.path(), tool));
+        assert!(
+            decision(&output).is_none(),
+            "{tool} was refused: {}",
+            stdout(&output)
+        );
+    }
+}
+
+#[test]
+fn an_allowlist_lets_safescopes_own_tools_through() {
+    // The audited path has to stay open, or the mode denies the only way of
+    // making a change that would be recorded.
+    let _guard = env_lock();
+    let (data, workspace) = allowlist_workspace();
+
+    let output = hook(
+        data.path(),
+        &tool_payload(workspace.path(), "mcp__safescope__prepare_change"),
+    );
+    assert!(decision(&output).is_none(), "{}", stdout(&output));
+}
+
+#[test]
+fn an_allowlist_lets_through_a_tool_the_policy_names() {
+    let _guard = env_lock();
+    let (data, workspace) = allowlist_workspace();
+
+    let output = hook(data.path(), &tool_payload(workspace.path(), "WebSearch"));
+    assert!(decision(&output).is_none(), "{}", stdout(&output));
+}

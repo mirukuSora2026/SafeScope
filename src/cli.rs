@@ -81,6 +81,14 @@ pub enum Command {
     ///
     /// Repairs nothing. What it cannot conclude is reported for a person.
     Recover,
+    /// Report what changed without going through SafeScope.
+    ///
+    /// Detects; it does not prevent. A file listed here is already changed and
+    /// its previous contents are already gone — the point is that it is named.
+    Drift {
+        #[command(subcommand)]
+        action: Option<DriftAction>,
+    },
     /// Reverse the most recent completed change.
     ///
     /// Refused if the file has been edited since, rather than overwriting that
@@ -119,6 +127,16 @@ pub enum PolicyAction {
     Show,
 }
 
+#[derive(Debug, Subcommand)]
+pub enum DriftAction {
+    /// Adopt the workspace as it stands as the new baseline.
+    ///
+    /// What a person does after reviewing drift and deciding to keep it.
+    /// Anything outstanding stops being reported, so it is never done on the
+    /// engine's own initiative.
+    Accept,
+}
+
 /// Runs a parsed command, returning the process exit code.
 pub fn run(cli: Cli) -> i32 {
     match dispatch(&cli) {
@@ -152,6 +170,10 @@ fn dispatch(cli: &Cli) -> Result<i32> {
             action: PolicyAction::Show,
         } => approve::show(&cli.workspace).map(|()| exit::OK),
         Command::Status => report::status(&cli.workspace),
+        Command::Drift { action } => match action {
+            None => report::drift(&cli.workspace),
+            Some(DriftAction::Accept) => repair::accept_drift(&cli.workspace),
+        },
         Command::Recover => repair::recover(&cli.workspace),
         Command::Undo => repair::undo(&cli.workspace),
         Command::History { limit } => report::history(&cli.workspace, *limit),

@@ -12,6 +12,7 @@ use std::path::Path;
 
 use crate::budget::{Budget, BudgetUsage};
 use crate::dataformatting::Msg;
+use crate::drift::{self, Survey};
 use crate::error::Result;
 use crate::hash::ContentHash;
 use crate::ids::TaskId;
@@ -19,6 +20,7 @@ use crate::journal::{Journal, OperationRecord};
 use crate::policy::{AllowEntry, BudgetLimits, CompiledPolicy, Grant, PolicyVersion};
 use crate::registry::{self, Registration};
 use crate::store::StatePaths;
+use crate::store::baseline_store::BaselineStore;
 use crate::store::content::ContentStore;
 use crate::store::grant_store::GrantStore;
 use crate::store::policy_store::PolicyStore;
@@ -157,7 +159,34 @@ impl Inspector {
         if self.policy_edited() {
             notes.push(Msg::HookPolicyEdited);
         }
+        // What the coverage notice has always said in the abstract, said about
+        // this workspace: these files changed, they have no snapshot, and
+        // SafeScope did not make them.
+        if let Ok(Some(survey)) = self.drift()
+            && !survey.is_clean()
+        {
+            notes.push(Msg::HookChangedOutside {
+                count: survey.entries.len(),
+            });
+        }
         Ok(notes)
+    }
+
+    /// What changed in this workspace without going through the engine.
+    ///
+    /// `None` when no baseline was ever taken. Takes no lock: this is a
+    /// question, and it is asked at the end of a turn, which is exactly when the
+    /// MCP server is likely to be holding the workspace.
+    pub fn drift(&self) -> Result<Option<Survey>> {
+        let Some(baseline) = BaselineStore::new(&self.paths).current()? else {
+            return Ok(None);
+        };
+        let recorded = self.journal.observed_states()?;
+        Ok(Some(drift::survey(
+            self.registration.root(),
+            &baseline,
+            &recorded,
+        )))
     }
 
     fn usable_grants(&self) -> Result<Vec<Grant>> {
