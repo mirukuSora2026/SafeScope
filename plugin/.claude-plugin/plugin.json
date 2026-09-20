@@ -1,0 +1,11 @@
+{
+  "name": "safescope",
+  "displayName": "SafeScope",
+  "version": "0.1.0",
+  "description": "Keeps file changes inside an approved scope and budget, and records them so they can be reviewed and undone.",
+  "license": "MIT",
+  "keywords": ["scope", "budget", "undo", "audit"],
+  "skills": "./skills/",
+  "hooks": "./hooks/hooks.json",
+  "mcpServers": "./.mcp.json"
+}

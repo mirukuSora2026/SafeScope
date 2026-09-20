@@ -11,3 +11,6 @@
 # ruflo local tool state.
 .claude/proven-config.json
 .claude/.proven-config-version
+
+# Built per platform by scripts/build-plugin.sh; not checked in.
+plugin/bin/safescope

@@ -1,0 +1,35 @@
+{
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Write|Edit|MultiEdit|NotebookEdit",
+        "hooks": [
+          {
+            "type": "command",
+            "args": ["${CLAUDE_PLUGIN_ROOT}/bin/safescope", "hook"]
+          }
+        ]
+      }
+    ],
+    "SessionStart": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "args": ["${CLAUDE_PLUGIN_ROOT}/bin/safescope", "hook"]
+          }
+        ]
+      }
+    ],
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "args": ["${CLAUDE_PLUGIN_ROOT}/bin/safescope", "hook"]
+          }
+        ]
+      }
+    ]
+  }
+}

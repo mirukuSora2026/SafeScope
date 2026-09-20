@@ -1,0 +1,8 @@
+{
+  "mcpServers": {
+    "safescope": {
+      "command": "${CLAUDE_PLUGIN_ROOT}/bin/safescope",
+      "args": ["--workspace", "${CLAUDE_PROJECT_DIR}", "mcp"]
+    }
+  }
+}

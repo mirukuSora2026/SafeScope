@@ -51,6 +51,11 @@ the tests.
 - Column alignment goes through `dataformatting::pad`, not `{:<n}`. Format width
   counts characters, so a Korean or Japanese label leaves every later column
   ragged.
+- Plugin manifests are checked against the host's documentation, never guessed
+  at, and a test runs the argv each manifest names. A manifest whose binary never
+  answers is a plugin that silently does nothing.
+- Skills are instructions, not enforcement. Every check a skill describes is also
+  made inside the engine, because a skill is advice a model may or may not follow.
 - The hook is not the boundary. Per the host's documented behaviour a hook that
   exits with anything but 0 or 2 is non-blocking, and a disabled hook never runs,
   so every check it performs is also performed inside the engine. Never write a
@@ -127,8 +132,16 @@ src/
    └─ hook.rs         the PreToolUse hook
 ```
 
-Modules still to come: the plugin package and the CLI commands for status and
-recover.
+Modules still to come: the CLI commands for status and recover.
+
+```
+plugin/                   the Claude Code package
+├─ .claude-plugin/plugin.json
+├─ .mcp.json              the safescope MCP server
+├─ hooks/hooks.json       PreToolUse, SessionStart, Stop
+├─ skills/                start, plan, status, history, undo, finish
+└─ bin/safescope          built by scripts/build-plugin.sh, not checked in
+```
 
 ## Commands
 
