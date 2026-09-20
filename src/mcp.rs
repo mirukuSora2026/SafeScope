@@ -13,6 +13,7 @@
 
 pub mod approval;
 pub mod schema;
+pub mod socket;
 pub mod wire;
 
 use std::collections::HashMap;
@@ -31,14 +32,14 @@ use crate::dataformatting::Msg;
 use crate::error::Result;
 use crate::ids::{PlanId, RequestId};
 use crate::paths::RelPath;
-use crate::planner::{ChangePlan, ChangeRequest};
+use crate::planner::ChangePlan;
 use crate::session::WriteSession;
 use crate::undo::UndoPlan;
 
 use self::wire::{
     AppliedChange, ApplyChange, ApplyUndo, GrantedExpansion, History, HistoryEntry, HistoryQuery,
-    NoArguments, PrepareChange, PreparedPlan, PreparedUndo, RequestExpansion, RequestedOperation,
-    Status, to_mcp_error,
+    NoArguments, PrepareChange, PreparedPlan, PreparedUndo, RequestExpansion, Status,
+    to_change_request, to_mcp_error,
 };
 
 /// How many past operations `get_history` returns by default.
@@ -398,7 +399,14 @@ impl ServerHandler for SafeScope {
 }
 
 /// Runs the server over stdio until the client disconnects.
+///
+/// Under a guard this relays instead. The engine has to be outside the sandbox
+/// to carry out the changes it approves, so what the host starts here is a pipe
+/// to it rather than a second copy of it.
 pub async fn serve(root: PathBuf) -> Result<()> {
+    if let Some(path) = socket::socket_from_env() {
+        return socket::relay(&path).await;
+    }
     let server = SafeScope::open(&root)?;
     let running = rmcp::ServiceExt::serve(server, rmcp::transport::stdio())
         .await
@@ -412,45 +420,6 @@ pub async fn serve(root: PathBuf) -> Result<()> {
         })?;
     let _ = running.waiting().await;
     Ok(())
-}
-
-fn to_change_request(request: &PrepareChange) -> Result<ChangeRequest> {
-    let path = RelPath::parse(&request.path)?;
-    Ok(match request.operation {
-        RequestedOperation::Create => ChangeRequest::Create {
-            path,
-            contents: required_contents(request)?,
-        },
-        RequestedOperation::Replace => ChangeRequest::Replace {
-            path,
-            contents: required_contents(request)?,
-        },
-        RequestedOperation::Trash => ChangeRequest::Trash { path },
-        RequestedOperation::Move => {
-            let destination = request.to.as_deref().ok_or_else(|| missing("to"))?;
-            ChangeRequest::Move {
-                from: path,
-                to: RelPath::parse(destination)?,
-            }
-        }
-    })
-}
-
-fn required_contents(request: &PrepareChange) -> Result<Vec<u8>> {
-    request
-        .contents
-        .as_ref()
-        .map(|text| text.as_bytes().to_vec())
-        .ok_or_else(|| missing("contents"))
-}
-
-fn missing(field: &str) -> crate::error::Error {
-    crate::error::Error::Denied(crate::error::Denial::new(
-        crate::error::ErrorCode::InvalidPath,
-        Msg::McpMissingField {
-            field: field.to_owned(),
-        },
-    ))
 }
 
 fn parse_plan_id(text: &str) -> std::result::Result<PlanId, ErrorData> {

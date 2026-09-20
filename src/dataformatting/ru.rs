@@ -229,6 +229,14 @@ SafeScope знает только об изменениях, сделанных 
         Msg::HintAllowlistMode { allowed } => {
             format!("Инструменты, разрешённые политикой: {allowed}")
         }
+        Msg::GuardUnsupportedHere => "Защищённый запуск требует песочницы ядра, а на этой платформе её нет.".to_owned(),
+        Msg::HintGuardNeedsSandbox => "`safescope guard` работает на macOS через sandbox-exec. В других системах \
+запустите команду без него и посмотрите `safescope drift`, чтобы увидеть, что изменилось помимо движка."
+            .to_owned(),
+        Msg::GuardStarting { path } => format!(
+            "Защищается {path}. Ничто из запускаемого этой командой не сможет туда писать; \
+             изменения должны идти через SafeScope."
+        ),
         Msg::RecoveryFoundNothing => "Восстанавливать было нечего.".to_owned(),
         Msg::RecoverySettled { aborted, committed } => {
             format!("Разрешено операций: выполненных — {committed}, невыполненных — {aborted}.")

@@ -7,8 +7,11 @@
 
 use serde::{Deserialize, Serialize};
 
-use crate::error::Error;
+use crate::dataformatting::Msg;
+use crate::error::{Denial, Error, ErrorCode, Result};
 use crate::journal::OperationRecord;
+use crate::paths::RelPath;
+use crate::planner::ChangeRequest;
 use crate::session::SessionStatus;
 
 /// What a change should do.
@@ -286,4 +289,49 @@ pub struct GrantedExpansion {
     pub expires_in_seconds: u64,
     /// How the approval was obtained, so the transcript records which it was.
     pub approved_via: String,
+}
+
+/// Turns a `prepare_change` request into the engine's own request type.
+///
+/// Here rather than beside the tool that receives one: this is the translation
+/// between what a client sends and what the engine takes, which is the whole
+/// subject of this module. `RelPath::parse` is the only way a path gets in, so
+/// a traversing or absolute path is refused before the engine sees it.
+pub fn to_change_request(request: &PrepareChange) -> Result<ChangeRequest> {
+    let path = RelPath::parse(&request.path)?;
+    Ok(match request.operation {
+        RequestedOperation::Create => ChangeRequest::Create {
+            path,
+            contents: required_contents(request)?,
+        },
+        RequestedOperation::Replace => ChangeRequest::Replace {
+            path,
+            contents: required_contents(request)?,
+        },
+        RequestedOperation::Trash => ChangeRequest::Trash { path },
+        RequestedOperation::Move => {
+            let destination = request.to.as_deref().ok_or_else(|| missing("to"))?;
+            ChangeRequest::Move {
+                from: path,
+                to: RelPath::parse(destination)?,
+            }
+        }
+    })
+}
+
+fn required_contents(request: &PrepareChange) -> Result<Vec<u8>> {
+    request
+        .contents
+        .as_ref()
+        .map(|text| text.as_bytes().to_vec())
+        .ok_or_else(|| missing("contents"))
+}
+
+fn missing(field: &str) -> Error {
+    Error::Denied(Denial::new(
+        ErrorCode::InvalidPath,
+        Msg::McpMissingField {
+            field: field.to_owned(),
+        },
+    ))
 }

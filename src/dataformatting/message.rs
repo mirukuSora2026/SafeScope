@@ -223,6 +223,13 @@ pub enum Msg {
         allowed: String,
     },
 
+    // ── Guard ──────────────────────────────────────────────────────────
+    GuardUnsupportedHere,
+    HintGuardNeedsSandbox,
+    GuardStarting {
+        path: String,
+    },
+
     // ── Recovery reporting ─────────────────────────────────────────────
     RecoveryFoundNothing,
     RecoverySettled {

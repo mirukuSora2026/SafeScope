@@ -81,6 +81,17 @@ pub enum Command {
     ///
     /// Repairs nothing. What it cannot conclude is reported for a person.
     Recover,
+    /// Run a command that cannot write to the workspace.
+    ///
+    /// The one thing here that is a boundary rather than a check. The command
+    /// runs under a kernel sandbox with every write to the workspace denied, so
+    /// a change outside the engine is impossible rather than refused. macOS
+    /// only; elsewhere this refuses rather than running the command unguarded.
+    Guard {
+        /// The command to run, after `--`.
+        #[arg(required = true, last = true, value_name = "COMMAND")]
+        command: Vec<String>,
+    },
     /// Report what changed without going through SafeScope.
     ///
     /// Detects; it does not prevent. A file listed here is already changed and
@@ -170,6 +181,7 @@ fn dispatch(cli: &Cli) -> Result<i32> {
             action: PolicyAction::Show,
         } => approve::show(&cli.workspace).map(|()| exit::OK),
         Command::Status => report::status(&cli.workspace),
+        Command::Guard { command } => crate::guard::run(&cli.workspace, command),
         Command::Drift { action } => match action {
             None => report::drift(&cli.workspace),
             Some(DriftAction::Accept) => repair::accept_drift(&cli.workspace),

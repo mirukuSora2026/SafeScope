@@ -221,6 +221,18 @@ SafeScope 는 이 도구들을 거친 변경만 압니다. 셸 명령이 쓴 것
             "확인한 뒤 `safescope drift accept`로 현재 상태를 새 기준으로 삼으세요.".to_owned()
         }
         Msg::HintAllowlistMode { allowed } => format!("정책이 허용하는 도구: {allowed}"),
+        Msg::GuardUnsupportedHere => {
+            "보호 실행에는 커널 샌드박스가 필요한데 이 플랫폼에는 없습니다.".to_owned()
+        }
+        Msg::HintGuardNeedsSandbox => {
+            "`safescope guard`는 macOS에서 sandbox-exec로 동작합니다. 다른 곳에서는 명령을 \
+그냥 실행하고 `safescope drift`로 엔진 밖에서 무엇이 바뀌었는지 확인하세요."
+                .to_owned()
+        }
+        Msg::GuardStarting { path } => format!(
+            "{path}을(를) 보호합니다. 이 명령이 시작하는 어떤 것도 그곳에 쓸 수 없으며, \
+             변경은 SafeScope를 거쳐야 합니다."
+        ),
         Msg::RecoveryFoundNothing => "복구할 것이 없었습니다.".to_owned(),
         Msg::RecoverySettled { aborted, committed } => {
             format!("실행된 연산 {committed}건과 실행되지 않은 {aborted}건을 확정했습니다.")

@@ -28,6 +28,7 @@ pub mod drift;
 pub mod error;
 pub mod executor;
 pub mod fault;
+pub mod guard;
 pub mod hash;
 pub mod ids;
 pub mod inspect;

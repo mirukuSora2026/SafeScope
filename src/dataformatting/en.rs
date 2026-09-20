@@ -222,6 +222,18 @@ so the change is not in force. Run `safescope policy approve` if it was meant to
                 .to_owned()
         }
         Msg::HintAllowlistMode { allowed } => format!("Tools the policy allows: {allowed}"),
+        Msg::GuardUnsupportedHere => {
+            "A guarded run needs a kernel sandbox, and this platform has none.".to_owned()
+        }
+        Msg::HintGuardNeedsSandbox => {
+            "`safescope guard` works on macOS, through sandbox-exec. Elsewhere, run the \
+command without it and use `safescope drift` to see what changed around the engine."
+                .to_owned()
+        }
+        Msg::GuardStarting { path } => format!(
+            "Guarding {path}. Nothing this command starts can write there; changes have to \
+             go through SafeScope."
+        ),
         Msg::RecoveryFoundNothing => "Nothing needed recovering.".to_owned(),
         Msg::RecoverySettled { aborted, committed } => {
             format!("Settled {committed} operation(s) that had run and {aborted} that had not.")

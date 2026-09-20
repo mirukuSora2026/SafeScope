@@ -209,6 +209,15 @@ SafeScope 只了解经由这些工具所做的更改。由 shell 命令写入的
             "检查之后，运行 `safescope drift accept` 将当前状态作为新的基准。".to_owned()
         }
         Msg::HintAllowlistMode { allowed } => format!("策略允许的工具：{allowed}"),
+        Msg::GuardUnsupportedHere => "受保护的运行需要内核沙箱，而此平台没有。".to_owned(),
+        Msg::HintGuardNeedsSandbox => {
+            "`safescope guard` 在 macOS 上通过 sandbox-exec 工作。在其他平台上，请直接运行命令，\
+并用 `safescope drift` 查看引擎之外发生了什么更改。"
+                .to_owned()
+        }
+        Msg::GuardStarting { path } => {
+            format!("正在保护 {path}。该命令启动的任何程序都无法写入那里，更改必须经过 SafeScope。")
+        }
         Msg::RecoveryFoundNothing => "没有需要恢复的内容。".to_owned(),
         Msg::RecoverySettled { aborted, committed } => {
             format!("已确定 {committed} 个已执行的操作和 {aborted} 个未执行的操作。")

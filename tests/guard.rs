@@ -1,0 +1,221 @@
+//! Running a command that cannot write to the workspace.
+//!
+//! Against the real `sandbox-exec` and a real child process. The guard's whole
+//! claim is that the kernel refuses the write, so a test that stubbed the
+//! sandbox would be testing the claim by assuming it.
+
+#![cfg(target_os = "macos")]
+
+use std::fs;
+use std::path::Path;
+use std::process::Command;
+
+use safescope::cli::approve;
+use safescope::guard;
+use safescope::mcp::socket::SOCKET_ENV;
+use safescope::registry;
+use safescope::store::DATA_DIR_ENV;
+use tempfile::TempDir;
+
+const BINARY: &str = env!("CARGO_BIN_EXE_safescope");
+
+const POLICY: &str = "\
+schema_version = 1
+
+[scope]
+allow = [\"src/**\"]
+";
+
+/// Serialises the tests, because `SAFESCOPE_DATA_DIR` is process-wide.
+fn env_lock() -> std::sync::MutexGuard<'static, ()> {
+    static LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
+    LOCK.lock().unwrap_or_else(|poisoned| poisoned.into_inner())
+}
+
+/// A registered workspace with `POLICY` approved and one file in `src/`.
+fn workspace() -> (TempDir, TempDir) {
+    let data = TempDir::new().expect("data");
+    let root = TempDir::new().expect("workspace");
+    unsafe { std::env::set_var(DATA_DIR_ENV, data.path()) };
+
+    fs::create_dir_all(root.path().join("src")).expect("mkdir");
+    fs::write(root.path().join("src/main.rs"), "fn main() {}\n").expect("seed");
+    let registration = registry::init(root.path()).expect("init");
+    fs::write(registration.policy_path(), POLICY).expect("policy");
+    let policy = approve::check_policy(POLICY).expect("valid");
+    approve::perform(&registration, policy, POLICY).expect("approve");
+
+    (data, root)
+}
+
+/// Runs `script` under the guard and returns its output.
+fn guarded(data: &Path, root: &Path, script: &str) -> std::process::Output {
+    Command::new(BINARY)
+        .env(DATA_DIR_ENV, data)
+        .env("SAFESCOPE_LANG", "en")
+        .arg("--workspace")
+        .arg(root)
+        .arg("guard")
+        .arg("--")
+        .arg("/bin/sh")
+        .arg("-c")
+        .arg(script)
+        .output()
+        .expect("run the guard")
+}
+
+fn text(output: &std::process::Output) -> String {
+    format!(
+        "{}{}",
+        String::from_utf8_lossy(&output.stdout),
+        String::from_utf8_lossy(&output.stderr)
+    )
+}
+
+#[test]
+fn a_guarded_command_cannot_write_a_file_in_the_workspace() {
+    let _serialised = env_lock();
+    let (data, root) = workspace();
+
+    let output = guarded(
+        data.path(),
+        root.path(),
+        "echo changed > src/main.rs && echo WROTE || echo REFUSED",
+    );
+    assert!(
+        text(&output).contains("REFUSED"),
+        "the write was allowed: {}",
+        text(&output)
+    );
+    assert_eq!(
+        fs::read_to_string(root.path().join("src/main.rs")).expect("read"),
+        "fn main() {}\n",
+        "the file changed anyway"
+    );
+}
+
+#[test]
+fn a_guarded_command_cannot_create_a_file_either() {
+    // A scope check is about paths that exist in a policy. This is about the
+    // workspace, so a new file nobody wrote a rule for is refused too.
+    let _serialised = env_lock();
+    let (data, root) = workspace();
+
+    let output = guarded(
+        data.path(),
+        root.path(),
+        "echo x > src/new.rs && echo WROTE || echo REFUSED",
+    );
+    assert!(text(&output).contains("REFUSED"), "{}", text(&output));
+    assert!(!root.path().join("src/new.rs").exists());
+}
+
+#[test]
+fn a_guarded_command_cannot_delete_a_file() {
+    let _serialised = env_lock();
+    let (data, root) = workspace();
+
+    guarded(data.path(), root.path(), "rm -f src/main.rs");
+    assert!(
+        root.path().join("src/main.rs").is_file(),
+        "the file was deleted"
+    );
+}
+
+#[test]
+fn a_guarded_command_cannot_reach_around_through_another_program() {
+    // The routes an agent actually took when the edit tools were denied were
+    // all some way of running a command. Under the guard it does not matter
+    // which program runs: the sandbox is inherited by everything started
+    // inside it.
+    let _serialised = env_lock();
+    let (data, root) = workspace();
+
+    let output = guarded(
+        data.path(),
+        root.path(),
+        "python3 -c \"open('src/main.rs','w').write('theirs')\" 2>/dev/null \
+         && echo WROTE || echo REFUSED",
+    );
+    assert!(text(&output).contains("REFUSED"), "{}", text(&output));
+    assert_eq!(
+        fs::read_to_string(root.path().join("src/main.rs")).expect("read"),
+        "fn main() {}\n"
+    );
+}
+
+#[test]
+fn a_guarded_command_can_still_read_the_workspace() {
+    // Denying reads would make the guard useless: an agent that cannot read the
+    // code cannot change it correctly either.
+    let _serialised = env_lock();
+    let (data, root) = workspace();
+
+    let output = guarded(data.path(), root.path(), "cat src/main.rs");
+    assert!(
+        text(&output).contains("fn main()"),
+        "reading was denied: {}",
+        text(&output)
+    );
+}
+
+#[test]
+fn a_guarded_command_can_write_outside_the_workspace() {
+    // The guard removes one capability, over one subtree. A profile that also
+    // broke temporary files would be one people turn off.
+    let _serialised = env_lock();
+    let (data, root) = workspace();
+    let elsewhere = TempDir::new().expect("elsewhere");
+    let target = elsewhere.path().join("scratch");
+
+    guarded(
+        data.path(),
+        root.path(),
+        &format!("echo fine > {}", target.display()),
+    );
+    assert_eq!(
+        fs::read_to_string(&target).unwrap_or_default().trim(),
+        "fine"
+    );
+}
+
+#[test]
+fn the_guard_tells_a_guarded_command_where_the_engine_is() {
+    // The engine runs outside the sandbox, so what the host starts has to be a
+    // relay to it. This variable is how `safescope mcp` knows which it is.
+    let _serialised = env_lock();
+    let (data, root) = workspace();
+
+    let output = guarded(data.path(), root.path(), &format!("echo ${SOCKET_ENV}"));
+    let socket = guard::socket_path(root.path()).expect("socket path");
+    assert!(
+        text(&output).contains(&socket.display().to_string()),
+        "the socket was not named: {}",
+        text(&output)
+    );
+}
+
+#[test]
+fn the_guard_reports_what_the_command_returned() {
+    let _serialised = env_lock();
+    let (data, root) = workspace();
+
+    let output = guarded(data.path(), root.path(), "exit 3");
+    assert_eq!(
+        output.status.code(),
+        Some(3),
+        "a script in front of this needs the command's own code"
+    );
+}
+
+#[test]
+fn the_socket_does_not_outlive_the_guarded_command() {
+    // It lives beside the workspace's state, so a stale one would be picked up
+    // by the next run and relayed to nothing.
+    let _serialised = env_lock();
+    let (data, root) = workspace();
+
+    guarded(data.path(), root.path(), "true");
+    let socket = guard::socket_path(root.path()).expect("socket path");
+    assert!(!socket.exists(), "the socket was left behind");
+}

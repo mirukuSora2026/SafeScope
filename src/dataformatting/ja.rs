@@ -228,6 +228,15 @@ SafeScope が把握しているのはこれらのツールを通した変更だ�
                 .to_owned()
         }
         Msg::HintAllowlistMode { allowed } => format!("ポリシーが許可するツール: {allowed}"),
+        Msg::GuardUnsupportedHere => "保護付きの実行にはカーネルサンドボックスが必要ですが、このプラットフォームにはありません。"
+            .to_owned(),
+        Msg::HintGuardNeedsSandbox => "`safescope guard` は macOS で sandbox-exec を用いて動作します。それ以外では \
+コマンドをそのまま実行し、`safescope drift` でエンジンの外で何が変わったかを確認してください。"
+            .to_owned(),
+        Msg::GuardStarting { path } => format!(
+            "{path} を保護します。このコマンドが起動するものは一切そこへ書き込めず、\
+             変更は SafeScope を経由する必要があります。"
+        ),
         Msg::RecoveryFoundNothing => "復旧が必要なものはありませんでした。".to_owned(),
         Msg::RecoverySettled { aborted, committed } => {
             format!("実行された操作 {committed} 件と、されなかった {aborted} 件を確定しました。")
