@@ -23,8 +23,10 @@ use std::path::{Path, PathBuf};
 
 use serde::{Deserialize, Serialize};
 
+use crate::dataformatting::Msg;
 use crate::domain::Operation;
 use crate::error::{Error, Result};
+use crate::inspect::Inspector;
 use crate::paths::RelPath;
 use crate::policy::{Authority, CompiledPolicy, EvaluationContext, evaluate};
 use crate::registry;
@@ -140,48 +142,15 @@ fn stop(input: &HookInput) -> Result<i32> {
 
 /// What is worth telling somebody about this workspace, if anything.
 ///
-/// Reads the journal and the approved policy directly rather than opening a
-/// session: a session takes the workspace lock, and the MCP server may be
-/// holding it. A hook that failed whenever the server was running would be a
-/// hook that never ran.
+/// Through an Inspector, which takes no lock. A session takes the workspace
+/// lock and the MCP server holds one for its whole life, so a hook that opened
+/// a session would be a hook that never ran while the server was up.
 fn concerns(input: &HookInput) -> Option<Vec<String>> {
     let cwd = input.cwd.as_ref().map(PathBuf::from)?;
     let root = workspace_root(&cwd)?;
-    let registration = registry::load(&root).ok()?;
-    let paths = registration.state_paths().ok()?;
+    let notes = Inspector::open(&root).ok()?.concerns().ok()?;
 
-    let mut notes = Vec::new();
-
-    if let Ok(journal) = crate::journal::Journal::open(&paths)
-        && let Ok(unsettled) = journal.unsettled()
-        && !unsettled.is_empty()
-    {
-        let attention = unsettled
-            .iter()
-            .filter(|record| record.stage.needs_attention())
-            .count();
-        if attention > 0 {
-            notes.push(
-                crate::dataformatting::Msg::HookNeedsAttention { count: attention }.to_string(),
-            );
-        }
-        notes.push(
-            crate::dataformatting::Msg::HookUnsettledWork {
-                count: unsettled.len(),
-            }
-            .to_string(),
-        );
-    }
-
-    // Somebody edited the policy and may believe the change took effect.
-    if let Ok(Some(approved)) = PolicyStore::new(&paths).current()
-        && let Ok(text) = registration.read_policy_text()
-        && approved.source_hash != crate::hash::ContentHash::of_bytes(text.as_bytes())
-    {
-        notes.push(crate::dataformatting::Msg::HookPolicyEdited.to_string());
-    }
-
-    (!notes.is_empty()).then_some(notes)
+    (!notes.is_empty()).then(|| notes.iter().map(ToString::to_string).collect())
 }
 
 /// The refusal reason, or `None` to say nothing.
@@ -205,7 +174,7 @@ fn decide(input: &HookInput) -> Option<String> {
         // Registered but never approved: nothing may be changed yet, and saying
         // so is more useful than letting the write land and be unrecorded.
         return Some(
-            crate::dataformatting::Msg::HintFillInAllowThenApprove {
+            Msg::HintFillInAllowThenApprove {
                 policy: registration.policy_path().display().to_string(),
             }
             .to_string(),

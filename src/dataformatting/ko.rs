@@ -79,6 +79,25 @@ pub(super) fn render(msg: &Msg) -> String {
             Label::Warnings => "경고",
             Label::Approved => "승인됨",
             Label::UnapprovedEdits => "정책 파일에 승인되지 않은 변경이 있습니다",
+            Label::Task => "작업",
+            Label::Usage => "사용량",
+            Label::State => "상태",
+            Label::LastChange => "마지막 변경",
+            Label::ChangedPaths => "변경 경로",
+            Label::Operations => "파일 작업",
+            Label::Moves => "이동",
+            Label::RecoveryStorage => "복구 저장소",
+            Label::Unfinished => "미완료",
+            Label::NeedsComparing => "대조 필요",
+            Label::TemporaryApprovals => "임시 승인",
+            Label::PolicyFile => "정책 파일",
+            Label::History => "기록",
+            Label::Coverage => "적용 범위",
+            Label::NotStarted => "시작된 작업 없음",
+            Label::NoPolicyYet => "승인된 정책 없음",
+            Label::Checks => "점검",
+            Label::Passed => "정상",
+            Label::Failed => "실패",
         }
         .to_owned(),
         Msg::WorkspaceAlreadyRegistered { root } => {
@@ -173,6 +192,19 @@ SafeScope 는 이 도구들을 거친 변경만 압니다. 셸 명령이 쓴 것
         Msg::HookPolicyEdited => "SafeScope 정책 파일이 수정됐지만 승인되지 않아 적용되지 \
 않았습니다. 의도한 변경이라면 `safescope policy approve` 를 실행하세요."
             .to_owned(),
+        Msg::RecoveryFoundNothing => "복구할 것이 없었습니다.".to_owned(),
+        Msg::RecoverySettled { aborted, committed } => {
+            format!("실행된 연산 {committed}건과 실행되지 않은 {aborted}건을 확정했습니다.")
+        }
+        Msg::RecoveryLeftUnresolved { count } => format!(
+            "연산 {count}건을 확정하지 못했습니다. 디스크의 내용이 이전 상태와도, 변경이 \
+             만들었을 상태와도 다릅니다. 아무것도 고치지 않았습니다. 여기서 추측하는 것이 \
+             멀쩡한 작업을 없애는 경로입니다."
+        ),
+        Msg::RecoveryRemovedTemporaries { count } => {
+            format!("크래시가 남긴 임시 파일 {count}개를 지웠습니다.")
+        }
+        Msg::DoctorHealthy => "여기서 점검한 것은 모두 정상입니다.".to_owned(),
         Msg::UndoNothingRecorded => "되돌릴 것이 없습니다. 이 작업에 완료된 연산이 \
 없습니다. 결과가 아직 불확실한 연산은 먼저 확정해야 합니다."
             .to_owned(),

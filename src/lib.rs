@@ -29,6 +29,7 @@ pub mod executor;
 pub mod fault;
 pub mod hash;
 pub mod ids;
+pub mod inspect;
 pub mod journal;
 pub mod mcp;
 pub mod path_guard;

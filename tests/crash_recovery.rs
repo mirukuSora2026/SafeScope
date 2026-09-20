@@ -285,3 +285,56 @@ fn the_recovery_data_survives_the_crash() {
     assert!(snapshots.verify(hash).expect("verify"));
     assert_eq!(snapshots.read(hash).expect("read"), ORIGINAL.as_bytes());
 }
+
+#[test]
+fn the_recover_command_settles_a_real_crash() {
+    // The loop closed: a process dies mid-operation, and the command a person
+    // actually runs works out what happened.
+    let crashed = Crashed::prepared();
+    crashed.crash_during("replace", "after_rename_before_commit");
+
+    let output = Command::new(env!("CARGO_BIN_EXE_safescope"))
+        .env(DATA_DIR_ENV, crashed.data.path())
+        .env("SAFESCOPE_LANG", "en")
+        .arg("--workspace")
+        .arg(crashed.workspace())
+        .arg("recover")
+        .output()
+        .expect("run recover");
+
+    let reported = String::from_utf8_lossy(&output.stdout);
+    assert_eq!(output.status.code(), Some(0), "{reported}");
+    assert!(reported.contains("Settled 1"), "{reported}");
+    assert_eq!(crashed.read("src/target.txt"), REPLACEMENT);
+}
+
+#[test]
+fn the_recover_command_reports_a_conflict_it_cannot_settle() {
+    // Nothing is repaired, and the exit code says the workspace still needs a
+    // person.
+    let crashed = Crashed::prepared();
+    crashed.crash_during("replace", "after_applying_record");
+    fs::write(
+        crashed.workspace().join("src/target.txt"),
+        "somebody edited this\n",
+    )
+    .expect("edit");
+
+    let output = Command::new(env!("CARGO_BIN_EXE_safescope"))
+        .env(DATA_DIR_ENV, crashed.data.path())
+        .env("SAFESCOPE_LANG", "en")
+        .arg("--workspace")
+        .arg(crashed.workspace())
+        .arg("recover")
+        .output()
+        .expect("run recover");
+
+    let reported = String::from_utf8_lossy(&output.stdout);
+    assert_eq!(output.status.code(), Some(1), "{reported}");
+    assert!(reported.contains("could not be settled"), "{reported}");
+    assert_eq!(
+        crashed.read("src/target.txt"),
+        "somebody edited this\n",
+        "recovery repairs nothing"
+    );
+}

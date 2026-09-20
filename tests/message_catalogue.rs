@@ -119,6 +119,14 @@ fn every_language_renders_every_message() {
         Msg::HookUnsettledWork { count: 2 },
         Msg::HookNeedsAttention { count: 1 },
         Msg::HookPolicyEdited,
+        Msg::RecoveryFoundNothing,
+        Msg::RecoverySettled {
+            aborted: 1,
+            committed: 2,
+        },
+        Msg::RecoveryLeftUnresolved { count: 1 },
+        Msg::RecoveryRemovedTemporaries { count: 3 },
+        Msg::DoctorHealthy,
         Msg::UndoNothingRecorded,
         Msg::UndoConflictAt {
             path: "src/a.rs".into(),
@@ -292,7 +300,7 @@ fn every_language_renders_every_message() {
     // omission.
     assert_eq!(
         samples.len(),
-        105,
+        110,
         "add the new Msg variant to this list, then update the count"
     );
 
@@ -347,6 +355,25 @@ fn every_label_renders_in_every_language() {
         Label::Warnings,
         Label::Approved,
         Label::UnapprovedEdits,
+        Label::Task,
+        Label::Usage,
+        Label::State,
+        Label::LastChange,
+        Label::ChangedPaths,
+        Label::Operations,
+        Label::Moves,
+        Label::RecoveryStorage,
+        Label::Unfinished,
+        Label::NeedsComparing,
+        Label::TemporaryApprovals,
+        Label::PolicyFile,
+        Label::History,
+        Label::Coverage,
+        Label::NotStarted,
+        Label::NoPolicyYet,
+        Label::Checks,
+        Label::Passed,
+        Label::Failed,
     ];
     for label in labels {
         for language in Language::ALL {

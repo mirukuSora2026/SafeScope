@@ -83,6 +83,25 @@ pub(super) fn render(msg: &Msg) -> String {
             Label::Warnings => "警告",
             Label::Approved => "承認済み",
             Label::UnapprovedEdits => "ポリシーファイルに未承認の変更があります",
+            Label::Task => "タスク",
+            Label::Usage => "使用量",
+            Label::State => "状態",
+            Label::LastChange => "最後の変更",
+            Label::ChangedPaths => "変更パス",
+            Label::Operations => "ファイル操作",
+            Label::Moves => "移動",
+            Label::RecoveryStorage => "復旧ストレージ",
+            Label::Unfinished => "未完了",
+            Label::NeedsComparing => "照合が必要",
+            Label::TemporaryApprovals => "一時承認",
+            Label::PolicyFile => "ポリシーファイル",
+            Label::History => "履歴",
+            Label::Coverage => "適用範囲",
+            Label::NotStarted => "タスク未開始",
+            Label::NoPolicyYet => "ポリシー未承認",
+            Label::Checks => "点検",
+            Label::Passed => "正常",
+            Label::Failed => "失敗",
         }
         .to_owned(),
         Msg::WorkspaceAlreadyRegistered { root } => {
@@ -179,6 +198,19 @@ SafeScope が把握しているのはこれらのツールを通した変更だ�
 されていないため、変更は有効になっていません。意図した変更であれば \
 `safescope policy approve` を実行してください。"
             .to_owned(),
+        Msg::RecoveryFoundNothing => "復旧が必要なものはありませんでした。".to_owned(),
+        Msg::RecoverySettled { aborted, committed } => {
+            format!("実行された操作 {committed} 件と、されなかった {aborted} 件を確定しました。")
+        }
+        Msg::RecoveryLeftUnresolved { count } => format!(
+            "{count} 件の操作を確定できませんでした。ディスク上の内容が、以前の状態とも\
+             変更後になるはずの状態とも一致しません。何も修復していません。\
+             ここで推測することこそ、無事な作業を壊す道です。"
+        ),
+        Msg::RecoveryRemovedTemporaries { count } => {
+            format!("クラッシュが残した一時ファイル {count} 件を削除しました。")
+        }
+        Msg::DoctorHealthy => "ここで点検した項目はすべて問題ありません。".to_owned(),
         Msg::UndoNothingRecorded => "元に戻すものがありません。このタスクには完了した\
 操作がありません。結果がまだ不明な操作は先に確定する必要があります。"
             .to_owned(),

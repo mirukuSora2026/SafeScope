@@ -9,16 +9,22 @@ set -e
 export PATH="$HOME/.cargo/bin:$PATH"
 cd "$(dirname "$0")/.."
 
+# Keeps the whole output of a failing gate. Tailing it once hid which test
+# suite had failed while every suite printed "ok", which cost an investigation.
+log=$(mktemp -d)/verify.log
+
 gate() {
     printf '%-18s' "$1"
     shift
-    if "$@" >/dev/null 2>&1; then
+    if "$@" >"$log" 2>&1; then
         echo ok
     else
         echo FAILED
         echo
         echo "--- $* ---"
-        "$@" 2>&1 | tail -30
+        grep -E 'FAILED|panicked at|^error|failures:' -A 6 "$log" | head -60
+        echo
+        echo "full output: $log"
         exit 1
     fi
 }

@@ -79,6 +79,25 @@ pub(super) fn render(msg: &Msg) -> String {
             Label::Warnings => "Предупреждения",
             Label::Approved => "Утверждено",
             Label::UnapprovedEdits => "в файле политики есть неутверждённые правки",
+            Label::Task => "Задача",
+            Label::Usage => "Расход",
+            Label::State => "Состояние",
+            Label::LastChange => "Последнее изменение",
+            Label::ChangedPaths => "изменённые пути",
+            Label::Operations => "операции",
+            Label::Moves => "перемещения",
+            Label::RecoveryStorage => "хранилище восстановления",
+            Label::Unfinished => "незавершённые",
+            Label::NeedsComparing => "требуют сверки",
+            Label::TemporaryApprovals => "временные одобрения",
+            Label::PolicyFile => "файл политики",
+            Label::History => "История",
+            Label::Coverage => "Покрытие",
+            Label::NotStarted => "задача не начата",
+            Label::NoPolicyYet => "политика не утверждена",
+            Label::Checks => "Проверки",
+            Label::Passed => "ок",
+            Label::Failed => "СБОЙ",
         }
         .to_owned(),
         Msg::WorkspaceAlreadyRegistered { root } => {
@@ -175,6 +194,19 @@ SafeScope знает только об изменениях, сделанных 
         Msg::HookPolicyEdited => "Файл политики SafeScope изменён, но не утверждён, поэтому \
 изменение не действует. Если оно задумано, выполните `safescope policy approve`."
             .to_owned(),
+        Msg::RecoveryFoundNothing => "Восстанавливать было нечего.".to_owned(),
+        Msg::RecoverySettled { aborted, committed } => {
+            format!("Разрешено операций: выполненных — {committed}, невыполненных — {aborted}.")
+        }
+        Msg::RecoveryLeftUnresolved { count } => format!(
+            "Операций, которые не удалось разрешить: {count}. То, что на диске, не совпадает \
+             ни с прежним состоянием, ни с тем, что дало бы изменение. Ничего не исправлено — \
+             догадки здесь и уничтожают целую работу."
+        ),
+        Msg::RecoveryRemovedTemporaries { count } => {
+            format!("Удалено временных файлов, оставленных сбоем: {count}.")
+        }
+        Msg::DoctorHealthy => "Всё проверенное здесь в порядке.".to_owned(),
         Msg::UndoNothingRecorded => "Отменять нечего: у этой задачи нет завершённых \
 операций. Операцию с неясным исходом нужно сначала разрешить."
             .to_owned(),

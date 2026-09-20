@@ -60,6 +60,11 @@ the tests.
   exits with anything but 0 or 2 is non-blocking, and a disabled hook never runs,
   so every check it performs is also performed inside the engine. Never write a
   check that exists only in the hook.
+- A question takes no lock. `Inspector` reads; `WriteSession` writes and holds
+  the workspace lock. A status that failed whenever the MCP server was running
+  would be a status nobody could ask for when it mattered.
+- Report every check, not only the failures. Listing what went wrong reads as a
+  clean bill of health for everything that was never looked at.
 - Callers go through `WriteSession`, not through Planner and Executor directly.
   The session holds the workspace lock for its lifetime, which is what makes the
   budget's check-then-reserve sound, and it is the one place that knows the
@@ -108,6 +113,7 @@ src/
 ├─ planner.rs          request → checked plan; stages payload, takes snapshot
 ├─ executor.rs         applies a plan in the order the invariants require
 ├─ session.rs          WriteSession — holds the lock, assembles the engine
+├─ inspect.rs          Inspector — reads a workspace without taking it
 ├─ budget.rs           how much a task may change (I5)
 ├─ undo.rs             reversing the last recorded operation
 ├─ recovery.rs         what happened when the engine stopped mid-operation
@@ -125,14 +131,17 @@ src/
 ├─ mcp.rs              the MCP server Claude talks to
 │  ├─ approval.rs     asking a person to widen the scope
 │  └─ wire.rs         what the tools take and return
-└─ cli.rs              init, policy, approve, check, hook, mcp
+└─ cli.rs              init, policy, approve, check, status, history,
+   │                   doctor, recover, undo, hook, mcp
    ├─ approve.rs      approving a policy
    ├─ grant.rs        approving a scope expansion at a terminal
+   ├─ report.rs       status, history, doctor — read-only, no lock
+   ├─ repair.rs      recover, undo — these take the lock
    ├─ check.rs
-   └─ hook.rs         the PreToolUse hook
+   └─ hook.rs         the PreToolUse and session hooks
 ```
 
-Modules still to come: the CLI commands for status and recover.
+The engine, the plugin and the command line are all in place.
 
 ```
 plugin/                   the Claude Code package

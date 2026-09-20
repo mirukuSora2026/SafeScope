@@ -8,6 +8,8 @@ pub mod approve;
 pub mod check;
 pub mod grant;
 pub mod hook;
+pub mod repair;
+pub mod report;
 
 use std::path::PathBuf;
 
@@ -63,6 +65,27 @@ pub enum Command {
         #[arg(long = "op", value_name = "OPERATION")]
         operations: Vec<String>,
     },
+    /// Report what this workspace has changed and what is left.
+    ///
+    /// Reads only, and takes no lock, so it works while the MCP server runs.
+    Status,
+    /// List what the current task has done.
+    History {
+        /// How many entries, most recent first.
+        #[arg(long, value_name = "N")]
+        limit: Option<usize>,
+    },
+    /// Check the workspace and report every check, not only the failures.
+    Doctor,
+    /// Work out what happened to operations the engine did not finish.
+    ///
+    /// Repairs nothing. What it cannot conclude is reported for a person.
+    Recover,
+    /// Reverse the most recent completed change.
+    ///
+    /// Refused if the file has been edited since, rather than overwriting that
+    /// edit.
+    Undo,
     /// Serve the MCP tools over stdio.
     ///
     /// Holds the workspace lock for as long as it runs, so a second server on
@@ -128,6 +151,11 @@ fn dispatch(cli: &Cli) -> Result<i32> {
         Command::Policy {
             action: PolicyAction::Show,
         } => approve::show(&cli.workspace).map(|()| exit::OK),
+        Command::Status => report::status(&cli.workspace),
+        Command::Recover => repair::recover(&cli.workspace),
+        Command::Undo => repair::undo(&cli.workspace),
+        Command::History { limit } => report::history(&cli.workspace, *limit),
+        Command::Doctor => report::doctor(&cli.workspace),
         Command::Approve { paths, operations } => {
             grant::run(&cli.workspace, paths, operations).map(|()| exit::OK)
         }

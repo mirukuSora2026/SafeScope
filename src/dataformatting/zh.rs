@@ -73,6 +73,25 @@ pub(super) fn render(msg: &Msg) -> String {
             Label::Warnings => "警告",
             Label::Approved => "已批准",
             Label::UnapprovedEdits => "策略文件有未批准的修改",
+            Label::Task => "任务",
+            Label::Usage => "用量",
+            Label::State => "状态",
+            Label::LastChange => "最近更改",
+            Label::ChangedPaths => "变更路径",
+            Label::Operations => "文件操作",
+            Label::Moves => "移动",
+            Label::RecoveryStorage => "恢复存储",
+            Label::Unfinished => "未完成",
+            Label::NeedsComparing => "需要比对",
+            Label::TemporaryApprovals => "临时批准",
+            Label::PolicyFile => "策略文件",
+            Label::History => "历史",
+            Label::Coverage => "覆盖范围",
+            Label::NotStarted => "尚未开始任务",
+            Label::NoPolicyYet => "尚未批准策略",
+            Label::Checks => "检查",
+            Label::Passed => "正常",
+            Label::Failed => "失败",
         }
         .to_owned(),
         Msg::WorkspaceAlreadyRegistered { root } => {
@@ -161,6 +180,18 @@ SafeScope 只了解经由这些工具所做的更改。由 shell 命令写入的
         Msg::HookPolicyEdited => "SafeScope 策略文件已修改但未批准，因此更改尚未生效。\
 如果确属有意，请运行 `safescope policy approve`。"
             .to_owned(),
+        Msg::RecoveryFoundNothing => "没有需要恢复的内容。".to_owned(),
+        Msg::RecoverySettled { aborted, committed } => {
+            format!("已确定 {committed} 个已执行的操作和 {aborted} 个未执行的操作。")
+        }
+        Msg::RecoveryLeftUnresolved { count } => format!(
+            "有 {count} 个操作无法确定：磁盘上的内容既不同于此前状态，\
+             也不同于该更改本应产生的结果。未做任何修复——在此处猜测正是毁掉完好工作的途径。"
+        ),
+        Msg::RecoveryRemovedTemporaries { count } => {
+            format!("已删除崩溃遗留的 {count} 个临时文件。")
+        }
+        Msg::DoctorHealthy => "此处检查的项目均正常。".to_owned(),
         Msg::UndoNothingRecorded => "没有可撤销的内容：此任务没有已完成的操作。\
 结果尚不明确的操作必须先行确定。"
             .to_owned(),

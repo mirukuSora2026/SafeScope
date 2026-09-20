@@ -79,6 +79,25 @@ pub(super) fn render(msg: &Msg) -> String {
             Label::Warnings => "Warnings",
             Label::Approved => "Approved",
             Label::UnapprovedEdits => "the policy file has unapproved edits",
+            Label::Task => "Task",
+            Label::Usage => "Usage",
+            Label::State => "State",
+            Label::LastChange => "Last change",
+            Label::ChangedPaths => "changed paths",
+            Label::Operations => "operations",
+            Label::Moves => "moves",
+            Label::RecoveryStorage => "recovery storage",
+            Label::Unfinished => "unfinished",
+            Label::NeedsComparing => "needs comparing",
+            Label::TemporaryApprovals => "temporary approvals",
+            Label::PolicyFile => "policy file",
+            Label::History => "History",
+            Label::Coverage => "Coverage",
+            Label::NotStarted => "no task started",
+            Label::NoPolicyYet => "no policy approved",
+            Label::Checks => "Checks",
+            Label::Passed => "ok",
+            Label::Failed => "FAILED",
         }
         .to_owned(),
         Msg::WorkspaceAlreadyRegistered { root } => {
@@ -173,6 +192,19 @@ written by a shell command or another tool are not covered and cannot be undone 
         Msg::HookPolicyEdited => "The SafeScope policy file has been edited but not approved, \
 so the change is not in force. Run `safescope policy approve` if it was meant to be."
             .to_owned(),
+        Msg::RecoveryFoundNothing => "Nothing needed recovering.".to_owned(),
+        Msg::RecoverySettled { aborted, committed } => {
+            format!("Settled {committed} operation(s) that had run and {aborted} that had not.")
+        }
+        Msg::RecoveryLeftUnresolved { count } => format!(
+            "{count} operation(s) could not be settled: what is on disk matches neither what \
+             was there before nor what the change would have produced. Nothing was repaired — \
+             guessing here is how intact work gets destroyed."
+        ),
+        Msg::RecoveryRemovedTemporaries { count } => {
+            format!("Removed {count} temporary file(s) a crash left behind.")
+        }
+        Msg::DoctorHealthy => "Everything checked here is in order.".to_owned(),
         Msg::UndoNothingRecorded => "There is nothing to undo: this task has no completed \
 operation. An operation whose outcome is still unclear has to be settled first."
             .to_owned(),

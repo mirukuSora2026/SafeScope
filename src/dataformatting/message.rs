@@ -32,6 +32,25 @@ pub enum Label {
     Warnings,
     Approved,
     UnapprovedEdits,
+    Task,
+    Usage,
+    State,
+    LastChange,
+    ChangedPaths,
+    Operations,
+    Moves,
+    RecoveryStorage,
+    Unfinished,
+    NeedsComparing,
+    TemporaryApprovals,
+    PolicyFile,
+    History,
+    Coverage,
+    NotStarted,
+    NoPolicyYet,
+    Checks,
+    Passed,
+    Failed,
 }
 
 /// A message that can be shown to a person.
@@ -174,6 +193,20 @@ pub enum Msg {
         count: usize,
     },
     HookPolicyEdited,
+
+    // ── Recovery reporting ─────────────────────────────────────────────
+    RecoveryFoundNothing,
+    RecoverySettled {
+        aborted: usize,
+        committed: usize,
+    },
+    RecoveryLeftUnresolved {
+        count: usize,
+    },
+    RecoveryRemovedTemporaries {
+        count: usize,
+    },
+    DoctorHealthy,
 
     // ── Undo ───────────────────────────────────────────────────────────
     UndoNothingRecorded,
