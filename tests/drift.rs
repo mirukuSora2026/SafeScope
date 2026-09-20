@@ -237,3 +237,25 @@ fn a_symlink_is_not_followed_to_decide_what_changed() {
         );
     }
 }
+
+#[test]
+fn a_baseline_is_never_silently_replaced() {
+    // The session hook takes one at session start and the session takes one at
+    // task start. If the second overwrote the first, everything the agent did
+    // before it first called SafeScope would become the starting point.
+    let _guard = env_lock();
+    let (_data, root) = workspace();
+
+    let registration = registry::load(root.path()).expect("load");
+    let paths = registration.state_paths().expect("paths");
+    let store = safescope::store::baseline_store::BaselineStore::new(&paths);
+    store.ensure(root.path()).expect("first baseline");
+
+    write_around_the_engine(root.path(), "src/sneaked.rs", "// before any session\n");
+
+    // Opening a session starts a task, which must not adopt the new file.
+    let session = WriteSession::open(root.path()).expect("open");
+    let survey = session.drift().expect("survey").expect("a baseline");
+    assert_eq!(survey.entries.len(), 1);
+    assert_eq!(survey.entries[0].path.as_str(), "src/sneaked.rs");
+}

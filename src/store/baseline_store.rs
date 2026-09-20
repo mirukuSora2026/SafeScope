@@ -47,6 +47,19 @@ impl BaselineStore {
         write_atomically(&self.path, &encoded)
     }
 
+    /// Takes a baseline only if there is not one already.
+    ///
+    /// Never overwrites. A baseline is the last moment the workspace was known
+    /// to be accounted for, and replacing it adopts everything done since as
+    /// the new starting point — which is how drift disappears without anybody
+    /// deciding it should. Replacing one is `accept`, and a person asks for it.
+    pub fn ensure(&self, root: &std::path::Path) -> Result<()> {
+        if self.current()?.is_some() {
+            return Ok(());
+        }
+        self.store(&Baseline::capture(root))
+    }
+
     /// Forgets the baseline, so a workspace stops claiming one it no longer has.
     pub fn clear(&self) -> Result<()> {
         match std::fs::remove_file(&self.path) {

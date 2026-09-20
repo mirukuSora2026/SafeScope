@@ -42,6 +42,7 @@ use crate::inspect::Inspector;
 use crate::paths::RelPath;
 use crate::policy::{Authority, CompiledPolicy, EnforcementMode, EvaluationContext, evaluate};
 use crate::registry;
+use crate::store::baseline_store::BaselineStore;
 use crate::store::policy_store::PolicyStore;
 
 /// The pending tool call, as the host sends it.
@@ -123,6 +124,8 @@ fn pre_tool_use(input: &HookInput) -> Result<i32> {
 /// Silence when there is nothing to say. A line that appears every session is a
 /// line nobody reads.
 fn session_start(input: &HookInput) -> Result<i32> {
+    ensure_baseline(input);
+
     let Some(notes) = concerns(input) else {
         return Ok(crate::cli::exit::OK);
     };
@@ -150,6 +153,35 @@ fn stop(input: &HookInput) -> Result<i32> {
     let output = serde_json::json!({ "systemMessage": notes.join("\n") });
     println!("{output}");
     Ok(crate::cli::exit::OK)
+}
+
+/// Takes a drift baseline at the start of a session, if there is not one.
+///
+/// Here rather than only when a task begins, because a task begins at the first
+/// SafeScope call and an agent may change files long before it makes one — or
+/// never make one at all, which is the case worth catching. A baseline taken
+/// then would quietly adopt whatever had already been done as the starting
+/// point, and report a clean workspace.
+///
+/// Takes no lock and does not need one: the baseline is written atomically, and
+/// two sessions starting together would write the same answer. Failure is
+/// silent, because a hook that fails loudly is a hook a person turns off.
+fn ensure_baseline(input: &HookInput) {
+    let Some(root) = input
+        .cwd
+        .as_ref()
+        .map(PathBuf::from)
+        .and_then(|cwd| workspace_root(&cwd))
+    else {
+        return;
+    };
+    let Ok(registration) = registry::load(&root) else {
+        return;
+    };
+    let Ok(paths) = registration.state_paths() else {
+        return;
+    };
+    let _ = BaselineStore::new(&paths).ensure(&root);
 }
 
 /// What is worth telling somebody about this workspace, if anything.

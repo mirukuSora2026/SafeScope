@@ -115,7 +115,7 @@ impl WriteSession {
             Some(task) => task,
             None => {
                 let task = tasks.start()?;
-                baselines.store(&Baseline::capture(root))?;
+                baselines.ensure(root)?;
                 task
             }
         };
