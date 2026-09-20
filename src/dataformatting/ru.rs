@@ -164,6 +164,17 @@ SafeScope знает только об изменениях, сделанных 
         Msg::McpTransportFailed { reason } => {
             format!("Не удалось обслужить MCP-соединение: {reason}")
         }
+        Msg::HookUnsettledWork { count } => format!(
+            "У SafeScope есть {count} операц. с незавершённой записью. Выполните \
+             `safescope recover`, прежде чем полагаться на то, что лежит на диске."
+        ),
+        Msg::HookNeedsAttention { count } => format!(
+            "SafeScope не может сказать, чем закончились {count} операц.; их должен сверить \
+             человек. Автоматически ничего не исправлено."
+        ),
+        Msg::HookPolicyEdited => "Файл политики SafeScope изменён, но не утверждён, поэтому \
+изменение не действует. Если оно задумано, выполните `safescope policy approve`."
+            .to_owned(),
         Msg::UndoNothingRecorded => "Отменять нечего: у этой задачи нет завершённых \
 операций. Операцию с неясным исходом нужно сначала разрешить."
             .to_owned(),

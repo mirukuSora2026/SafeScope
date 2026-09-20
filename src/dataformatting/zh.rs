@@ -151,6 +151,16 @@ SafeScope 只了解经由这些工具所做的更改。由 shell 命令写入的
         Msg::McpTransportFailed { reason } => {
             format!("无法提供 MCP 连接：{reason}")
         }
+        Msg::HookUnsettledWork { count } => format!(
+            "SafeScope 有 {count} 个操作尚未记录完毕。在依赖磁盘上的内容之前，\
+             请运行 `safescope recover`。"
+        ),
+        Msg::HookNeedsAttention { count } => format!(
+            "SafeScope 无法判定 {count} 个操作的结果，需要有人进行比对。未自动修复任何内容。"
+        ),
+        Msg::HookPolicyEdited => "SafeScope 策略文件已修改但未批准，因此更改尚未生效。\
+如果确属有意，请运行 `safescope policy approve`。"
+            .to_owned(),
         Msg::UndoNothingRecorded => "没有可撤销的内容：此任务没有已完成的操作。\
 结果尚不明确的操作必须先行确定。"
             .to_owned(),

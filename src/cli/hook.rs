@@ -37,6 +37,9 @@ use crate::store::policy_store::PolicyStore;
 /// hook that broke on a new field would disable itself at the worst moment.
 #[derive(Debug, Deserialize)]
 struct HookInput {
+    /// Which event this is. Anything unrecognised is answered with silence.
+    #[serde(default)]
+    hook_event_name: Option<String>,
     #[serde(default)]
     cwd: Option<String>,
     #[serde(default)]
@@ -76,7 +79,19 @@ pub fn run() -> Result<i32> {
         return Ok(crate::cli::exit::OK);
     };
 
-    if let Some(reason) = decide(&input) {
+    match input.hook_event_name.as_deref() {
+        Some("PreToolUse") => pre_tool_use(&input),
+        Some("SessionStart") => session_start(&input),
+        Some("Stop") => stop(&input),
+        // An event this build does not handle is answered with silence rather
+        // than a guess, because a guess here becomes a decision.
+        _ => Ok(crate::cli::exit::OK),
+    }
+}
+
+/// Judges a pending tool call.
+fn pre_tool_use(input: &HookInput) -> Result<i32> {
+    if let Some(reason) = decide(input) {
         let output = HookOutput {
             hook_specific_output: PreToolUseDecision {
                 hook_event_name: "PreToolUse",
@@ -87,6 +102,86 @@ pub fn run() -> Result<i32> {
         println!("{}", serde_json::to_string(&output).expect("serialisable"));
     }
     Ok(crate::cli::exit::OK)
+}
+
+/// Tells a new session what it should know before trusting the workspace.
+///
+/// Silence when there is nothing to say. A line that appears every session is a
+/// line nobody reads.
+fn session_start(input: &HookInput) -> Result<i32> {
+    let Some(notes) = concerns(input) else {
+        return Ok(crate::cli::exit::OK);
+    };
+
+    // SessionStart takes additionalContext, which is what puts this in front of
+    // Claude rather than only in the transcript.
+    let output = serde_json::json!({
+        "hookSpecificOutput": {
+            "hookEventName": "SessionStart",
+            "additionalContext": notes.join("\n"),
+        }
+    });
+    println!("{output}");
+    Ok(crate::cli::exit::OK)
+}
+
+/// Says at the end of a turn what was left unfinished.
+fn stop(input: &HookInput) -> Result<i32> {
+    let Some(notes) = concerns(input) else {
+        return Ok(crate::cli::exit::OK);
+    };
+
+    // Stop does not take hookSpecificOutput.additionalContext; systemMessage is
+    // what it honours.
+    let output = serde_json::json!({ "systemMessage": notes.join("\n") });
+    println!("{output}");
+    Ok(crate::cli::exit::OK)
+}
+
+/// What is worth telling somebody about this workspace, if anything.
+///
+/// Reads the journal and the approved policy directly rather than opening a
+/// session: a session takes the workspace lock, and the MCP server may be
+/// holding it. A hook that failed whenever the server was running would be a
+/// hook that never ran.
+fn concerns(input: &HookInput) -> Option<Vec<String>> {
+    let cwd = input.cwd.as_ref().map(PathBuf::from)?;
+    let root = workspace_root(&cwd)?;
+    let registration = registry::load(&root).ok()?;
+    let paths = registration.state_paths().ok()?;
+
+    let mut notes = Vec::new();
+
+    if let Ok(journal) = crate::journal::Journal::open(&paths)
+        && let Ok(unsettled) = journal.unsettled()
+        && !unsettled.is_empty()
+    {
+        let attention = unsettled
+            .iter()
+            .filter(|record| record.stage.needs_attention())
+            .count();
+        if attention > 0 {
+            notes.push(
+                crate::dataformatting::Msg::HookNeedsAttention { count: attention }.to_string(),
+            );
+        }
+        notes.push(
+            crate::dataformatting::Msg::HookUnsettledWork {
+                count: unsettled.len(),
+            }
+            .to_string(),
+        );
+    }
+
+    // Somebody edited the policy and may believe the change took effect.
+    if let Ok(Some(approved)) = PolicyStore::new(&paths).current()
+        && let Ok(text) = registration.read_policy_text()
+        && approved.source_hash != crate::hash::ContentHash::of_bytes(text.as_bytes())
+    {
+        notes.push(crate::dataformatting::Msg::HookPolicyEdited.to_string());
+    }
+
+    (!notes.is_empty()).then_some(notes)
 }
 
 /// The refusal reason, or `None` to say nothing.
@@ -219,6 +314,7 @@ mod tests {
     #[test]
     fn says_nothing_without_a_working_directory() {
         let input = HookInput {
+            hook_event_name: Some("PreToolUse".to_owned()),
             cwd: None,
             tool_name: "Write".to_owned(),
             tool_input: json!({ "file_path": "/p/src/a.rs" }),
@@ -229,6 +325,7 @@ mod tests {
     #[test]
     fn says_nothing_outside_a_workspace() {
         let input = HookInput {
+            hook_event_name: Some("PreToolUse".to_owned()),
             cwd: Some("/definitely/not/a/workspace".to_owned()),
             tool_name: "Write".to_owned(),
             tool_input: json!({ "file_path": "/definitely/not/a/workspace/a.rs" }),

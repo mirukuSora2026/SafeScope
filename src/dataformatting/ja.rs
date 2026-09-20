@@ -167,6 +167,18 @@ SafeScope が把握しているのはこれらのツールを通した変更だ�
         Msg::McpTransportFailed { reason } => {
             format!("MCP 接続を提供できませんでした: {reason}")
         }
+        Msg::HookUnsettledWork { count } => format!(
+            "SafeScope に記録を終えていない操作が {count} 件あります。ディスク上の状態を\
+             当てにする前に `safescope recover` を実行してください。"
+        ),
+        Msg::HookNeedsAttention { count } => format!(
+            "SafeScope は {count} 件の操作の結果を判定できません。人が照合する必要があります。\
+             自動的に修復したものはありません。"
+        ),
+        Msg::HookPolicyEdited => "SafeScope のポリシーファイルは編集されていますが承認\
+されていないため、変更は有効になっていません。意図した変更であれば \
+`safescope policy approve` を実行してください。"
+            .to_owned(),
         Msg::UndoNothingRecorded => "元に戻すものがありません。このタスクには完了した\
 操作がありません。結果がまだ不明な操作は先に確定する必要があります。"
             .to_owned(),

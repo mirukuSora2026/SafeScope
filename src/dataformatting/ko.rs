@@ -162,6 +162,17 @@ SafeScope 는 이 도구들을 거친 변경만 압니다. 셸 명령이 쓴 것
         Msg::McpTransportFailed { reason } => {
             format!("MCP 연결을 제공하지 못했습니다: {reason}")
         }
+        Msg::HookUnsettledWork { count } => format!(
+            "SafeScope 에 기록을 마치지 못한 연산이 {count}건 있습니다. 디스크의 상태를 \
+             믿기 전에 `safescope recover` 를 실행하세요."
+        ),
+        Msg::HookNeedsAttention { count } => format!(
+            "SafeScope 가 연산 {count}건의 결과를 말할 수 없습니다. 사람이 대조해야 합니다. \
+             자동으로 고친 것은 없습니다."
+        ),
+        Msg::HookPolicyEdited => "SafeScope 정책 파일이 수정됐지만 승인되지 않아 적용되지 \
+않았습니다. 의도한 변경이라면 `safescope policy approve` 를 실행하세요."
+            .to_owned(),
         Msg::UndoNothingRecorded => "되돌릴 것이 없습니다. 이 작업에 완료된 연산이 \
 없습니다. 결과가 아직 불확실한 연산은 먼저 확정해야 합니다."
             .to_owned(),

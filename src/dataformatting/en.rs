@@ -162,6 +162,17 @@ written by a shell command or another tool are not covered and cannot be undone 
         Msg::McpTransportFailed { reason } => {
             format!("The MCP connection could not be served: {reason}")
         }
+        Msg::HookUnsettledWork { count } => format!(
+            "SafeScope has {count} operation(s) it did not finish recording. Run \
+             `safescope recover` before relying on what is on disk."
+        ),
+        Msg::HookNeedsAttention { count } => format!(
+            "SafeScope cannot say what became of {count} operation(s); somebody has to \
+             compare them. Nothing was repaired automatically."
+        ),
+        Msg::HookPolicyEdited => "The SafeScope policy file has been edited but not approved, \
+so the change is not in force. Run `safescope policy approve` if it was meant to be."
+            .to_owned(),
         Msg::UndoNothingRecorded => "There is nothing to undo: this task has no completed \
 operation. An operation whose outcome is still unclear has to be settled first."
             .to_owned(),

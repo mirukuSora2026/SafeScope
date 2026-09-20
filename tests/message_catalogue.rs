@@ -116,6 +116,9 @@ fn every_language_renders_every_message() {
         Msg::McpTransportFailed {
             reason: "closed".into(),
         },
+        Msg::HookUnsettledWork { count: 2 },
+        Msg::HookNeedsAttention { count: 1 },
+        Msg::HookPolicyEdited,
         Msg::UndoNothingRecorded,
         Msg::UndoConflictAt {
             path: "src/a.rs".into(),
@@ -289,7 +292,7 @@ fn every_language_renders_every_message() {
     // omission.
     assert_eq!(
         samples.len(),
-        102,
+        105,
         "add the new Msg variant to this list, then update the count"
     );
 

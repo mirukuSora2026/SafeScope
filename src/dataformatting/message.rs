@@ -166,6 +166,15 @@ pub enum Msg {
         reason: String,
     },
 
+    // ── Session hooks ──────────────────────────────────────────────────
+    HookUnsettledWork {
+        count: usize,
+    },
+    HookNeedsAttention {
+        count: usize,
+    },
+    HookPolicyEdited,
+
     // ── Undo ───────────────────────────────────────────────────────────
     UndoNothingRecorded,
     UndoConflictAt {
