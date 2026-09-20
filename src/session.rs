@@ -50,6 +50,20 @@ pub struct WriteSession {
     tasks: TaskStore,
     task: TaskId,
     grants: Vec<Grant>,
+    client: Option<ConnectedClient>,
+}
+
+/// Who is driving this session.
+///
+/// Recorded at the one moment the client declares itself, and never inferred
+/// afterwards. Whether it can put a question to a person decides which
+/// approvals the engine may accept, so guessing is not an option.
+#[derive(Debug, Clone)]
+pub struct ConnectedClient {
+    pub name: String,
+    /// Declared during initialize. A client that did not declare it cannot be
+    /// asked, so approvals through it are not available at all.
+    pub can_ask_a_person: bool,
 }
 
 impl WriteSession {
@@ -93,6 +107,7 @@ impl WriteSession {
             tasks,
             task,
             grants: Vec::new(),
+            client: None,
             registration,
         })
     }
@@ -116,6 +131,21 @@ impl WriteSession {
     /// Temporary approvals in force for this session.
     pub fn grants(&self) -> &[Grant] {
         &self.grants
+    }
+
+    /// Records who connected and what they can do.
+    ///
+    /// Called once, from the MCP handshake. It is not a request the client can
+    /// repeat to change the answer later.
+    pub fn note_client(&mut self, name: String, can_ask_a_person: bool) {
+        self.client = Some(ConnectedClient {
+            name,
+            can_ask_a_person,
+        });
+    }
+
+    pub fn client(&self) -> Option<&ConnectedClient> {
+        self.client.as_ref()
     }
 
     /// Adds an approval obtained through the approval flow.

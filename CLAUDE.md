@@ -111,22 +111,26 @@ src/
 │  ├─ lock.rs          one writer at a time, per workspace
 │  ├─ task_store.rs    which task the workspace is on
 │  └─ policy_store.rs  approved policy versions
-└─ cli.rs              init, policy approve/show, check, hook
+├─ mcp.rs              the MCP server Claude talks to
+│  └─ wire.rs         what the tools take and return
+└─ cli.rs              init, policy approve/show, check, hook, mcp
    ├─ approve.rs
    ├─ check.rs
    └─ hook.rs           the PreToolUse hook
 ```
 
-Modules still to come: the `mcp` adapter and the CLI commands for plan, apply,
-undo, status and recover.
+Modules still to come: elicitation-based approvals, the plugin package, and the
+CLI commands for status and recover.
 
 ## Commands
 
 ```bash
-cargo test
-cargo clippy --all-targets -- -D warnings
-cargo build --features fault-injection
+./scripts/verify.sh     # every gate, each reported separately
 ```
+
+Run that rather than chaining the gates by hand. A `cargo clippy ... | tail`
+reports the exit status of `tail`, which is how a clippy failure once got
+committed.
 
 Crash-recovery tests spawn `sfs-crash-harness` with `SAFESCOPE_FAULT=<point>`
 under the `fault-injection` feature, abort it mid-operation, and then assert on

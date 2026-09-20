@@ -98,6 +98,26 @@ pub(super) fn render(msg: &Msg) -> String {
                 "目前还不能更改任何内容。请在 {policy} 中填写要允许的路径，然后运行 `safescope policy approve`。"
             )
         }
+        Msg::McpInstructions => "SafeScope 将文件更改保持在已批准的范围与限额之内，\
+并加以记录，以便复查和撤销。\n\n\
+先调用 prepare_change 检查并准备更改，该步骤不改动任何内容；\
+然后用返回的计划 ID 调用 apply_change。拒绝会说明是哪条规则所致，\
+以及申请扩大范围是否可能改变结果；若说不能，请勿重试同一请求。\n\n\
+SafeScope 只了解经由这些工具所做的更改。由 shell 命令写入的内容不会被记录，\
+也无法在此撤销。"
+            .to_owned(),
+        Msg::McpCoverageNotice => "只有经由 SafeScope 的更改才会被记录。\
+由 shell 命令或其他工具写入的文件不在覆盖范围内，无法在此撤销。"
+            .to_owned(),
+        Msg::McpMissingField { field } => {
+            format!("此操作需要 {field}，但未提供。")
+        }
+        Msg::McpUnknownPlan { plan } => {
+            format!("没有已准备的计划 {plan}。它可能已被执行，或服务器此后重启过。")
+        }
+        Msg::McpTransportFailed { reason } => {
+            format!("无法提供 MCP 连接：{reason}")
+        }
         Msg::UndoNothingRecorded => "没有可撤销的内容：此任务没有已完成的操作。\
 结果尚不明确的操作必须先行确定。"
             .to_owned(),

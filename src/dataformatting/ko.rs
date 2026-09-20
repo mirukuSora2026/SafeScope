@@ -106,6 +106,28 @@ pub(super) fn render(msg: &Msg) -> String {
             "아직 아무것도 바꿀 수 없습니다. 허용할 경로를 {policy} 에 적은 뒤 \
              `safescope policy approve` 를 실행하세요."
         ),
+        Msg::McpInstructions => "SafeScope 는 파일 변경을 승인된 범위와 한도 안에 두고, \
+검토하고 되돌릴 수 있도록 기록합니다.\n\n\
+prepare_change 로 변경을 검사하고 준비하세요. 이 단계는 아무것도 바꾸지 않습니다. \
+그다음 돌려받은 계획 ID 로 apply_change 를 호출하세요. 거부에는 어떤 규칙 때문인지와 \
+범위 확장으로 답이 달라질 수 있는지가 담깁니다. 달라질 수 없다고 하면 같은 요청을 \
+다시 보내지 마세요.\n\n\
+SafeScope 는 이 도구들을 거친 변경만 압니다. 셸 명령이 쓴 것은 기록되지 않고 여기서 \
+되돌릴 수 없습니다."
+            .to_owned(),
+        Msg::McpCoverageNotice => "SafeScope 를 거친 변경만 기록됩니다. 셸 명령이나 다른 \
+도구가 쓴 파일은 여기서 다루지 않으며 되돌릴 수 없습니다."
+            .to_owned(),
+        Msg::McpMissingField { field } => {
+            format!("이 연산에는 {field} 이(가) 필요한데 주어지지 않았습니다.")
+        }
+        Msg::McpUnknownPlan { plan } => format!(
+            "준비된 계획 {plan} 이 없습니다. 이미 실행됐거나, 그 뒤에 서버가 다시 \
+             시작됐을 수 있습니다."
+        ),
+        Msg::McpTransportFailed { reason } => {
+            format!("MCP 연결을 제공하지 못했습니다: {reason}")
+        }
         Msg::UndoNothingRecorded => "되돌릴 것이 없습니다. 이 작업에 완료된 연산이 \
 없습니다. 결과가 아직 불확실한 연산은 먼저 확정해야 합니다."
             .to_owned(),

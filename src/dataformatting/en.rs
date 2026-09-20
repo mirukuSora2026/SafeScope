@@ -106,6 +106,28 @@ pub(super) fn render(msg: &Msg) -> String {
             "Nothing can be changed yet. Add the paths you want to allow to {policy}, then run \
              `safescope policy approve`."
         ),
+        Msg::McpInstructions => "SafeScope keeps file changes inside an approved scope and \
+budget, and records them so they can be reviewed and undone.\n\n\
+Call prepare_change to check a change and stage it; it alters nothing. Then call \
+apply_change with the plan id it returned. A refusal names the rule responsible and says \
+whether asking for a wider scope could change the answer — when it says it cannot, do not \
+retry the same request.\n\n\
+SafeScope only knows about changes made through these tools. Anything written by a shell \
+command is not recorded and cannot be undone here."
+            .to_owned(),
+        Msg::McpCoverageNotice => "Only changes made through SafeScope are recorded. Files \
+written by a shell command or another tool are not covered and cannot be undone here."
+            .to_owned(),
+        Msg::McpMissingField { field } => {
+            format!("This operation needs a {field} and none was given.")
+        }
+        Msg::McpUnknownPlan { plan } => format!(
+            "There is no prepared plan {plan}. It may have been applied already, or the \
+             server may have restarted since."
+        ),
+        Msg::McpTransportFailed { reason } => {
+            format!("The MCP connection could not be served: {reason}")
+        }
         Msg::UndoNothingRecorded => "There is nothing to undo: this task has no completed \
 operation. An operation whose outcome is still unclear has to be settled first."
             .to_owned(),

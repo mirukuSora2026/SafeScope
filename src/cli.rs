@@ -50,6 +50,11 @@ pub enum Command {
         #[command(subcommand)]
         action: PolicyAction,
     },
+    /// Serve the MCP tools over stdio.
+    ///
+    /// Holds the workspace lock for as long as it runs, so a second server on
+    /// the same workspace will not start.
+    Mcp,
     /// Answer a Claude Code PreToolUse hook on stdin.
     ///
     /// Reads the pending tool call as JSON and writes a decision, or stays
@@ -110,6 +115,7 @@ fn dispatch(cli: &Cli) -> Result<i32> {
         Command::Policy {
             action: PolicyAction::Show,
         } => approve::show(&cli.workspace).map(|()| exit::OK),
+        Command::Mcp => serve_mcp(&cli.workspace).map(|()| exit::OK),
         Command::Hook => hook::run(),
         Command::Check { path, op } => check::run(&cli.workspace, path, op),
     }
@@ -131,6 +137,23 @@ fn init(cli: &Cli) -> Result<()> {
         }
     );
     Ok(())
+}
+
+/// Runs the MCP server until the client disconnects.
+///
+/// The runtime is built here rather than around `main`, so every other command
+/// stays synchronous and starts without one.
+fn serve_mcp(workspace: &std::path::Path) -> Result<()> {
+    let runtime = tokio::runtime::Builder::new_multi_thread()
+        .enable_all()
+        .build()
+        .map_err(|error| {
+            Error::Faulted(crate::error::Fault::io(
+                "could not start the async runtime",
+                error,
+            ))
+        })?;
+    runtime.block_on(crate::mcp::serve(workspace.to_path_buf()))
 }
 
 /// Reports an error the same way [`run`] does, for callers that catch one early.

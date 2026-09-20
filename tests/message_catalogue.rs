@@ -84,6 +84,17 @@ fn every_language_renders_every_message() {
         Msg::HintFillInAllowThenApprove {
             policy: ".safescope/policy.toml".into(),
         },
+        Msg::McpInstructions,
+        Msg::McpCoverageNotice,
+        Msg::McpMissingField {
+            field: "contents".into(),
+        },
+        Msg::McpUnknownPlan {
+            plan: "plan_1".into(),
+        },
+        Msg::McpTransportFailed {
+            reason: "closed".into(),
+        },
         Msg::UndoNothingRecorded,
         Msg::UndoConflictAt {
             path: "src/a.rs".into(),
@@ -257,7 +268,7 @@ fn every_language_renders_every_message() {
     // omission.
     assert_eq!(
         samples.len(),
-        89,
+        94,
         "add the new Msg variant to this list, then update the count"
     );
 

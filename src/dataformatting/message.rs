@@ -127,6 +127,19 @@ pub enum Msg {
         policy: String,
     },
 
+    // ── MCP server ─────────────────────────────────────────────────────
+    McpInstructions,
+    McpCoverageNotice,
+    McpMissingField {
+        field: String,
+    },
+    McpUnknownPlan {
+        plan: String,
+    },
+    McpTransportFailed {
+        reason: String,
+    },
+
     // ── Undo ───────────────────────────────────────────────────────────
     UndoNothingRecorded,
     UndoConflictAt {

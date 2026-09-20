@@ -30,6 +30,7 @@ pub mod fault;
 pub mod hash;
 pub mod ids;
 pub mod journal;
+pub mod mcp;
 pub mod path_guard;
 pub mod paths;
 pub mod planner;

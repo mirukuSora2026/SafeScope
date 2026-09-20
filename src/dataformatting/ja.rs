@@ -111,6 +111,28 @@ pub(super) fn render(msg: &Msg) -> String {
             "まだ何も変更できません。許可したいパスを {policy} に書いてから \
              `safescope policy approve` を実行してください。"
         ),
+        Msg::McpInstructions => "SafeScope はファイル変更を承認済みの範囲と上限の内側に\
+とどめ、確認と取り消しができるよう記録します。\n\n\
+まず prepare_change で変更を検査し準備します。この段階では何も変更されません。\
+次に返された計画 ID で apply_change を呼びます。拒否にはどのルールによるものかと、\
+範囲の拡張で結果が変わりうるかが示されます。変わらないとある場合は、\
+同じ要求を繰り返さないでください。\n\n\
+SafeScope が把握しているのはこれらのツールを通した変更だけです。\
+シェルコマンドが書いたものは記録されず、ここでは取り消せません。"
+            .to_owned(),
+        Msg::McpCoverageNotice => "SafeScope を通した変更のみが記録されます。\
+シェルコマンドや他のツールが書いたファイルは対象外で、ここでは取り消せません。"
+            .to_owned(),
+        Msg::McpMissingField { field } => {
+            format!("この操作には {field} が必要ですが、与えられていません。")
+        }
+        Msg::McpUnknownPlan { plan } => format!(
+            "準備された計画 {plan} はありません。すでに実行されたか、\
+             その後サーバーが再起動した可能性があります。"
+        ),
+        Msg::McpTransportFailed { reason } => {
+            format!("MCP 接続を提供できませんでした: {reason}")
+        }
         Msg::UndoNothingRecorded => "元に戻すものがありません。このタスクには完了した\
 操作がありません。結果がまだ不明な操作は先に確定する必要があります。"
             .to_owned(),
