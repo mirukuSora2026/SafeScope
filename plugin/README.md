@@ -48,11 +48,12 @@ another way. Denying the built-in edit tools in the project's
 measured, not assumed, by running real agent sessions against these projects:
 
 - With `Write` and `Edit` denied, the agent wrote the files through `Bash`
-  instead — `python3 -c "open(...).write(...)"`, `cat >`, `sed -i`. Two runs out
-  of two. Nothing was recorded.
+  instead — `python3 -c "open(...).write(...)"`, `cat >`, `sed -i`. Three runs
+  out of three. Nothing was recorded.
 - With `Bash` denied as well, it wrote them through `Monitor`, which also runs
-  shell commands, after first trying to spawn a subagent that would have had its
-  own tools. One run out of one. Nothing was recorded.
+  shell commands. Two runs out of two. Nothing was recorded. Before settling on
+  it, the same runs tried `Agent` and `Skill`, each of which would have handed
+  the work to something holding its own tools.
 
 Denying one way of running a command moves the work to another. The set of tools
 that can run one depends on the host and the session, so no list of denials is
