@@ -287,3 +287,54 @@ fn output_follows_the_language_setting() {
     assert!(text.contains("허용"), "{text}");
     assert!(text.contains("평가 과정"), "{text}");
 }
+
+#[test]
+fn approving_a_scope_expansion_without_a_terminal_is_refused() {
+    // The terminal half of the two-tier approval. It is not a strong boundary —
+    // an agent with shell access can run this binary — but it stops an approval
+    // that nobody typed.
+    let _guard = env_lock();
+    let (data, workspace) = dirs();
+    run(data.path(), workspace.path(), &["init"]);
+    approved(data.path(), workspace.path());
+
+    let output = run(
+        data.path(),
+        workspace.path(),
+        &["approve", "docs/Notes.md", "--op", "create"],
+    );
+    assert_eq!(output.status.code(), Some(1));
+    assert!(
+        stderr(&output).contains("APPROVAL_NEEDS_TTY"),
+        "{}",
+        stderr(&output)
+    );
+}
+
+#[test]
+fn approving_an_unknown_operation_is_refused() {
+    let _guard = env_lock();
+    let (data, workspace) = dirs();
+    run(data.path(), workspace.path(), &["init"]);
+    approved(data.path(), workspace.path());
+
+    let output = run(
+        data.path(),
+        workspace.path(),
+        &["approve", "docs/Notes.md", "--op", "delete"],
+    );
+    assert_eq!(output.status.code(), Some(1));
+    assert!(stderr(&output).contains("create, replace, move or trash"));
+}
+
+#[test]
+fn approving_a_traversing_path_is_refused() {
+    let _guard = env_lock();
+    let (data, workspace) = dirs();
+    run(data.path(), workspace.path(), &["init"]);
+    approved(data.path(), workspace.path());
+
+    let output = run(data.path(), workspace.path(), &["approve", "../escape"]);
+    assert_eq!(output.status.code(), Some(1));
+    assert!(stderr(&output).contains("INVALID_PATH"));
+}

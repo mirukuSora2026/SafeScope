@@ -228,3 +228,58 @@ fn status_counts_the_approvals_in_force() {
         1
     );
 }
+
+#[test]
+fn an_approval_from_another_process_is_seen_at_once() {
+    // The whole reason grants live in a store rather than in memory. A person
+    // typing `safescope approve` does so while the server is running and holding
+    // the workspace lock, so the two processes have to see the same grant.
+    use std::time::{Duration, SystemTime};
+
+    use safescope::domain::OpSet;
+    use safescope::paths::RelPath;
+    use safescope::policy::{ApprovalSource, Grant};
+    use safescope::store::grant_store::GrantStore;
+    use safescope::store::policy_store::PolicyStore;
+    use safescope::store::task_store::TaskStore;
+
+    let mut client = Client::connect();
+    std::fs::create_dir_all(client.workspace().join("docs")).expect("mkdir");
+
+    let error = client.call_expecting_refusal(
+        "prepare_change",
+        json!({ "operation": "create", "path": "docs/Notes.md", "contents": "x\n" }),
+    );
+    assert_eq!(error["data"]["code"], "SCOPE_DENIED");
+
+    // What `safescope approve` does once a person has confirmed.
+    client.with_state(|paths| {
+        let approved = PolicyStore::new(paths)
+            .current()
+            .expect("read")
+            .expect("approved");
+        let task = TaskStore::new(paths).current_or_start().expect("task");
+        let grant = Grant::new(
+            task,
+            approved.version,
+            vec![RelPath::parse("docs/Notes.md").expect("path")],
+            OpSet::all(),
+            ApprovalSource::Terminal,
+            SystemTime::now() + Duration::from_secs(600),
+        );
+        GrantStore::new(paths).issue(&grant).expect("issue");
+    });
+
+    let prepared = client.call(
+        "prepare_change",
+        json!({ "operation": "create", "path": "docs/Notes.md", "contents": "noted\n" }),
+    );
+    client.call("apply_change", json!({ "plan_id": prepared["plan_id"] }));
+    assert_eq!(client.read("docs/Notes.md"), "noted\n");
+
+    // And the status says how that permission was obtained.
+    assert_eq!(
+        client.call("get_status", json!({}))["temporary_approvals"],
+        1
+    );
+}

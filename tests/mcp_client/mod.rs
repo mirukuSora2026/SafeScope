@@ -12,7 +12,7 @@ use std::process::{Child, ChildStdin, ChildStdout, Command, Stdio};
 
 use safescope::cli::approve;
 use safescope::registry;
-use safescope::store::DATA_DIR_ENV;
+use safescope::store::{DATA_DIR_ENV, StatePaths};
 use serde_json::{Value, json};
 use tempfile::TempDir;
 
@@ -236,6 +236,19 @@ impl Client {
 
     pub fn exists(&self, relative: &str) -> bool {
         self.root.path().join(relative).exists()
+    }
+
+    /// Runs `body` with this workspace's state directory in the environment.
+    ///
+    /// Lets a test act as a second process would — issuing a grant the way
+    /// `safescope approve` does, while the server is running and holding the
+    /// workspace lock.
+    pub fn with_state<T>(&self, body: impl FnOnce(&StatePaths) -> T) -> T {
+        let _guard = env_lock();
+        unsafe { std::env::set_var(DATA_DIR_ENV, self._data.path()) };
+        let registration = registry::load(self.root.path()).expect("registered");
+        let paths = registration.state_paths().expect("state paths");
+        body(&paths)
     }
 
     pub fn workspace(&self) -> &Path {
