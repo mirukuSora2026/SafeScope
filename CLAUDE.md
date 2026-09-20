@@ -87,6 +87,13 @@ the tests.
   without being it is worse than none. Report the gap in the status output.
   Refusing a shell command under `mode = "allowlist"` is not an exception: it is
   refused for not being on a list, never for what it appears to do.
+- Only the guard is a boundary; everything else is a check. A policy, a hook and
+  an allowlist all depend on something agreeing to consult them, and the
+  measurements say what happens when it does not. Never describe one of them as
+  preventing anything — they refuse, which is different.
+- The guard's sandbox profile names the resolved path as well as the given one.
+  On macOS `/var` is a symlink to `/private/var`, so a profile naming only the
+  first loads without error and protects nothing.
 - Refuse by allowlist, never by deny list. Measured: given a list of forbidden
   tools an agent moves to one that is not on it, and the set of tools that can
   run a shell command is not knowable in advance. A deny list is a promise that

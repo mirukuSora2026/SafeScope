@@ -75,8 +75,22 @@ Measured on the same project: with the allowlist in force the agent tried
 `Edit`, `Bash` and `Agent`, was refused each time with the reason, and changed
 nothing.
 
-**Drift detection** is what notices when enforcement does not hold, and it will
-not always hold — a hook can be disabled, and the engine cannot check what it
+**`safescope guard -- <command>`** stops being a check and becomes a boundary.
+The command runs under a kernel sandbox with every write to the workspace
+denied, so a change outside the engine is impossible rather than refused, and
+everything the command starts inherits it. The engine runs outside the sandbox
+and the agent reaches it over a socket, so the audited path still works.
+
+Measured on the same project: the agent completed the task through SafeScope in
+ten turns, both changes recorded, nothing changed outside — and asked to create
+a file with a shell redirect, it got `operation not permitted` from the kernel.
+
+macOS only, through `sandbox-exec`; elsewhere it refuses rather than running the
+command unprotected. It denies writes without exception, so a test run cannot
+write `__pycache__` either. That is the cost of the guarantee.
+
+**Drift detection** is what notices when enforcement does not hold, and without
+a guard it will not always hold — a hook can be disabled, and the engine cannot check what it
 never sees. A baseline is taken when a session starts; `safescope status` and
 `safescope drift` then name the files that changed without the engine, which are
 exactly the ones with no stored previous contents and no undo.
