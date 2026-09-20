@@ -16,8 +16,26 @@ fn lock_path(directory: &TempDir) -> std::path::PathBuf {
     directory.path().join("state").join("lock")
 }
 
+/// Serialises these tests, because one of them forks.
+///
+/// An flock belongs to the open file description, and `fork` duplicates it. A
+/// child spawned by one test holds a copy of every descriptor this process has
+/// open until it reaches `exec` and CLOEXEC closes them — including a lock
+/// another test is in the middle of releasing. That window is short and the
+/// resulting failure looked exactly like a lock that was not released, which is
+/// the wrong thing to go looking for.
+///
+/// Serialising is the fix rather than retrying: these tests are about who holds
+/// the lock, so a second process holding it by accident is not noise to be
+/// tolerated.
+fn fork_lock() -> std::sync::MutexGuard<'static, ()> {
+    static LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
+    LOCK.lock().unwrap_or_else(|poisoned| poisoned.into_inner())
+}
+
 #[test]
 fn a_free_workspace_can_be_locked() {
+    let _serialised = fork_lock();
     let directory = TempDir::new().expect("temp dir");
     let lock = WorkspaceLock::acquire_at(&lock_path(&directory)).expect("acquire");
     assert!(lock.path().is_file(), "the lock file is created");
@@ -25,6 +43,7 @@ fn a_free_workspace_can_be_locked() {
 
 #[test]
 fn a_second_holder_is_refused_rather_than_made_to_wait() {
+    let _serialised = fork_lock();
     // Waiting would hang on another session that may be sitting at a prompt.
     let directory = TempDir::new().expect("temp dir");
     let path = lock_path(&directory);
@@ -40,6 +59,7 @@ fn a_second_holder_is_refused_rather_than_made_to_wait() {
 
 #[test]
 fn releasing_lets_the_next_holder_in() {
+    let _serialised = fork_lock();
     let directory = TempDir::new().expect("temp dir");
     let path = lock_path(&directory);
 
@@ -51,6 +71,7 @@ fn releasing_lets_the_next_holder_in() {
 
 #[test]
 fn separate_workspaces_do_not_block_each_other() {
+    let _serialised = fork_lock();
     let first = TempDir::new().expect("first");
     let second = TempDir::new().expect("second");
 
@@ -60,6 +81,7 @@ fn separate_workspaces_do_not_block_each_other() {
 
 #[test]
 fn the_lock_file_outlives_the_lock() {
+    let _serialised = fork_lock();
     // Unlinking it would let a second process create a fresh file and lock
     // that instead, leaving both believing they held the workspace.
     let directory = TempDir::new().expect("temp dir");
@@ -72,6 +94,7 @@ fn the_lock_file_outlives_the_lock() {
 
 #[test]
 fn the_lock_is_released_when_the_holder_dies() {
+    let _serialised = fork_lock();
     // A crash must not leave a workspace permanently unusable. The kernel drops
     // the lock with the process, which is why this is an flock rather than a
     // file somebody has to remember to clean up.
