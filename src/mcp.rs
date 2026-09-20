@@ -12,6 +12,7 @@
 //! start.
 
 pub mod approval;
+pub mod schema;
 pub mod wire;
 
 use std::collections::HashMap;
@@ -35,7 +36,7 @@ use crate::session::WriteSession;
 use crate::undo::UndoPlan;
 
 use self::wire::{
-    AppliedChange, ApplyChange, ApplyUndo, GrantedExpansion, HistoryEntry, HistoryQuery,
+    AppliedChange, ApplyChange, ApplyUndo, GrantedExpansion, History, HistoryEntry, HistoryQuery,
     NoArguments, PrepareChange, PreparedPlan, PreparedUndo, RequestExpansion, RequestedOperation,
     Status, to_mcp_error,
 };
@@ -73,6 +74,18 @@ pub struct SafeScope {
     tool_router: ToolRouter<Self>,
 }
 
+/// The router with every schema resolved into standing on its own.
+///
+/// See [`schema::flatten`]: a tool whose parameters are described by `$ref`
+/// costs this server every tool it offers, not just that one.
+fn flattened_router() -> ToolRouter<SafeScope> {
+    let mut router = SafeScope::tool_router();
+    for route in router.map.values_mut() {
+        schema::flatten(&mut route.attr);
+    }
+    router
+}
+
 #[tool_router]
 impl SafeScope {
     /// Prepares a server for `root`. The workspace is opened on first use.
@@ -83,7 +96,7 @@ impl SafeScope {
             client: Mutex::new(None),
             plans: Mutex::new(HashMap::new()),
             undos: Mutex::new(HashMap::new()),
-            tool_router: Self::tool_router(),
+            tool_router: flattened_router(),
         })
     }
 
@@ -261,7 +274,7 @@ impl SafeScope {
     async fn get_history(
         &self,
         Parameters(query): Parameters<HistoryQuery>,
-    ) -> std::result::Result<Json<Vec<HistoryEntry>>, ErrorData> {
+    ) -> std::result::Result<Json<History>, ErrorData> {
         let session = self.session().await?;
         let mut history = session
             .journal()
@@ -270,7 +283,9 @@ impl SafeScope {
         history.reverse();
         history.truncate(query.limit.unwrap_or(DEFAULT_HISTORY));
 
-        Ok(Json(history.iter().map(HistoryEntry::of).collect()))
+        Ok(Json(History {
+            operations: history.iter().map(HistoryEntry::of).collect(),
+        }))
     }
 
     #[tool(

@@ -242,7 +242,7 @@ fn history_lists_what_was_done_most_recent_first() {
     }
 
     let history = client.call("get_history", json!({}));
-    let entries = history.as_array().expect("entries");
+    let entries = history["operations"].as_array().expect("entries");
     assert_eq!(entries.len(), 2);
     assert_eq!(
         entries[0]["paths"],
@@ -305,7 +305,7 @@ fn undo_appears_in_history_as_an_undo() {
     let undo = client.call("prepare_undo", json!({}));
     client.call("apply_undo", json!({ "plan_id": undo["plan_id"] }));
 
-    let history = client.call("get_history", json!({}));
+    let history = client.call("get_history", json!({}))["operations"].clone();
     assert_eq!(history[0]["kind"], "undo");
     assert_eq!(history[1]["kind"], "change");
 }
@@ -333,4 +333,57 @@ fn a_traversing_path_is_refused() {
         json!({ "operation": "create", "path": "../escape.txt", "contents": "x\n" }),
     );
     assert_eq!(error["data"]["code"], "INVALID_PATH");
+}
+
+#[test]
+fn no_tool_describes_its_parameters_by_reference() {
+    // Measured against a real host, not reasoned about: a schema carrying
+    // `$ref`/`$defs` made it drop the tool — and with it every other tool the
+    // server offered, leaving a session with no SafeScope tools and no way to
+    // search for any. That is indistinguishable from the plugin not being
+    // installed, so it fails silently in the worst possible way.
+    let mut client = Client::connect();
+    let response = client.request("tools/list", json!({}));
+
+    for tool in response["result"]["tools"].as_array().expect("tools") {
+        let name = tool["name"].as_str().expect("name");
+        for field in ["inputSchema", "outputSchema"] {
+            let schema = tool[field].to_string();
+            assert!(
+                !schema.contains("$ref") && !schema.contains("$defs"),
+                "{name}.{field} describes a type by reference: {schema}"
+            );
+        }
+    }
+}
+
+#[test]
+fn every_output_schema_describes_an_object() {
+    // Structured content is a JSON object, so a top-level array is not a schema
+    // a client can accept. `get_history` returned one, and the whole server's
+    // tool list went with it.
+    let mut client = Client::connect();
+    let response = client.request("tools/list", json!({}));
+
+    for tool in response["result"]["tools"].as_array().expect("tools") {
+        let name = tool["name"].as_str().expect("name");
+        let Some(schema) = tool.get("outputSchema") else {
+            continue;
+        };
+        assert_eq!(
+            schema["type"].as_str(),
+            Some("object"),
+            "{name} declares an output schema that is not an object: {schema}"
+        );
+    }
+}
+
+#[test]
+fn history_comes_back_under_a_named_field() {
+    let mut client = Client::connect();
+    let history = client.call("get_history", json!({}));
+    assert!(
+        history["operations"].is_array(),
+        "history should be an object with an operations list: {history}"
+    );
 }

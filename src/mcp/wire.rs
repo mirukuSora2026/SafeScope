@@ -193,6 +193,18 @@ impl Status {
     }
 }
 
+/// What `get_history` answers with.
+///
+/// A wrapper around the list rather than the list itself. A tool's
+/// `outputSchema` describes structured content, which is a JSON object, so a
+/// top-level array is not a schema a client can accept — and one that rejects
+/// it drops every tool the server offers, not only this one.
+#[derive(Debug, Clone, Serialize, schemars::JsonSchema)]
+pub struct History {
+    /// Most recent first.
+    pub operations: Vec<HistoryEntry>,
+}
+
 /// One past operation.
 #[derive(Debug, Clone, Serialize, schemars::JsonSchema)]
 pub struct HistoryEntry {
