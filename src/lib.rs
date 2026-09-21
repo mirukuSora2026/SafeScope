@@ -28,6 +28,9 @@ pub mod drift;
 pub mod error;
 pub mod executor;
 pub mod fault;
+/// Only where there is a sandbox to run under. See the module's own note: a
+/// guard that sometimes guards is worse than one that says it cannot.
+#[cfg(unix)]
 pub mod guard;
 pub mod hash;
 pub mod ids;

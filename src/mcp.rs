@@ -13,6 +13,7 @@
 
 pub mod approval;
 pub mod schema;
+#[cfg(unix)]
 pub mod socket;
 pub mod wire;
 
@@ -404,6 +405,7 @@ impl ServerHandler for SafeScope {
 /// to carry out the changes it approves, so what the host starts here is a pipe
 /// to it rather than a second copy of it.
 pub async fn serve(root: PathBuf) -> Result<()> {
+    #[cfg(unix)]
     if let Some(path) = socket::socket_from_env() {
         return socket::relay(&path).await;
     }

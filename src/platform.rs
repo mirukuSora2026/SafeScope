@@ -24,11 +24,15 @@
 #[cfg(target_os = "macos")]
 use std::ffi::CString;
 use std::io::Write as _;
+#[cfg(unix)]
 use std::os::fd::AsFd;
 #[cfg(target_os = "macos")]
 use std::os::fd::AsRawFd;
 
 use cap_std::fs::Dir;
+
+#[cfg(windows)]
+pub mod windows;
 
 use crate::dataformatting::Msg;
 use crate::error::{Denial, Error, ErrorCode, Fault, Result};
@@ -132,6 +136,7 @@ pub fn remove(directory: &Dir, name: &str) -> Result<()> {
 /// Reopening through the same descriptor keeps the capability — `openat` on
 /// `"."` cannot escape the directory it is relative to — while producing one the
 /// kernel will actually flush.
+#[cfg(unix)]
 pub fn fsync(directory: &Dir, operation: &str) -> Result<()> {
     let flushable = rustix::fs::openat(
         directory.as_fd(),
@@ -142,6 +147,13 @@ pub fn fsync(directory: &Dir, operation: &str) -> Result<()> {
     .map_err(|error| failed(operation, &std::io::Error::from(error)))?;
 
     rustix::fs::fsync(&flushable).map_err(|error| failed(operation, &std::io::Error::from(error)))
+}
+
+/// Windows has no directory flush; see [`windows::flush_directory`] for what
+/// that costs and why it is not emulated.
+#[cfg(windows)]
+pub fn fsync(directory: &Dir, operation: &str) -> Result<()> {
+    windows::flush_directory(directory).map_err(|error| failed(operation, &error))
 }
 
 /// Whether the destination may be replaced.
@@ -242,6 +254,19 @@ fn rename_no_replace(
 }
 
 /// Turns a rename failure into something a caller can act on.
+/// The Windows spelling: `SetFileInformationByHandle` with `FileRenameInfo`,
+/// which is relative to a directory handle and refuses an existing destination
+/// without a separate check.
+#[cfg(windows)]
+fn rename_no_replace(
+    from_directory: &Dir,
+    from_name: &str,
+    to_directory: &Dir,
+    to_name: &str,
+) -> std::io::Result<()> {
+    windows::rename_no_replace(from_directory, from_name, to_directory, to_name)
+}
+
 fn map_rename_error(error: &std::io::Error, from_name: &str, to_name: &str) -> Error {
     match error.raw_os_error() {
         Some(libc::EEXIST) | Some(libc::ENOTEMPTY) => Error::Denied(Denial::new(

@@ -1005,6 +1005,7 @@ dependencies = [
  "unicode-normalization",
  "unicode-width",
  "uuid",
+ "windows-sys 0.60.2",
 ]
 
 [[package]]

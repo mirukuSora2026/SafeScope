@@ -75,6 +75,12 @@ fn the_parent_handle_reaches_the_target() {
     assert!(metadata.is_file());
 }
 
+// Creating a symlink on Windows needs a privilege a test cannot assume, so
+// these run where one can be made. The engine's refusal itself is not
+// Unix-specific — it comes from `symlink_metadata`, which Windows has — but it
+// is unverified there, and a test that silently did not run would be worse than
+// one that is openly absent.
+#[cfg(unix)]
 #[test]
 fn refuses_a_symlink_as_the_target() {
     let (root, workspace) = workspace();
@@ -85,6 +91,12 @@ fn refuses_a_symlink_as_the_target() {
     assert_eq!(error.code(), ErrorCode::UnsupportedOperation);
 }
 
+// Creating a symlink on Windows needs a privilege a test cannot assume, so
+// these run where one can be made. The engine's refusal itself is not
+// Unix-specific — it comes from `symlink_metadata`, which Windows has — but it
+// is unverified there, and a test that silently did not run would be worse than
+// one that is openly absent.
+#[cfg(unix)]
 #[test]
 fn refuses_a_symlink_in_a_parent_component() {
     // The classic escape: everything about the name looks fine, and the link
@@ -99,6 +111,12 @@ fn refuses_a_symlink_in_a_parent_component() {
     assert_eq!(error.code(), ErrorCode::UnsupportedOperation);
 }
 
+// Creating a symlink on Windows needs a privilege a test cannot assume, so
+// these run where one can be made. The engine's refusal itself is not
+// Unix-specific — it comes from `symlink_metadata`, which Windows has — but it
+// is unverified there, and a test that silently did not run would be worse than
+// one that is openly absent.
+#[cfg(unix)]
 #[test]
 fn refuses_a_symlink_pointing_outside_the_workspace() {
     let (root, workspace) = workspace();

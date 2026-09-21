@@ -49,6 +49,26 @@ jobs:
       - name: Every gate
         run: ./scripts/verify.sh
 
+  windows:
+    # The port compiles here and on a cross-build, but only this job has ever
+    # run it. Until it is green, Windows is untested rather than supported — the
+    # first Linux run found every durability guarantee silently unenforced, and
+    # that is what an unrun platform is worth.
+    name: Windows
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
+      - uses: Swatinem/rust-cache@v2
+      - name: Build
+        run: cargo build --all-targets
+      - name: Clippy
+        run: cargo clippy --all-targets -- -D warnings
+      - name: Tests
+        run: cargo test
+
   packaged:
     # The plugin as somebody installs it, not as the tests rebuild it. The
     # binary the manifest names is not checked in, so this is the job that would

@@ -13,22 +13,38 @@ The status output says so, and so should you.
 
 ## Where this runs
 
-| | engine | `safescope guard` |
-|---|---|---|
-| macOS (Apple silicon) | every gate, 403 tests | yes |
-| Linux (arm64) | every gate, 394 tests | no — refuses |
-| Windows | does not compile | no |
+| | engine | `safescope guard` | evidence |
+|---|---|---|---|
+| macOS (Apple silicon) | every gate, 403 tests | yes | run here |
+| Linux (arm64) | every gate, 394 tests | no — refuses | run here |
+| Windows (x86-64) | **compiles; never run** | no — refuses | cross-build only |
 
-Both rows were run, not inferred. The nine tests the Linux run does not have are
-the guard's own, which are `cfg`-gated to the platform that has a sandbox.
+The first two rows were run, not inferred. Windows was not: the port compiles,
+including every test, and no part of it has executed. Treat it as untested until
+the `windows-latest` job in CI is green — the first time this was run on Linux
+it turned out every durability guarantee had been silently unenforced there, and
+that is what an unrun platform is worth.
+
+The tests Linux does not run are the guard's own, `cfg`-gated to the platform
+that has a sandbox. Windows additionally skips three symlink tests, because
+creating a symlink there needs a privilege a test cannot assume.
+
+### What Windows does differently
+
+- **No-overwrite rename** is `SetFileInformationByHandle` with `FileRenameInfo`:
+  relative to a directory handle, and refused by the kernel when the
+  destination is taken. Not a check followed by a rename.
+- **The single-writer lock** is `LockFileEx`, which refuses rather than waits
+  and is released when the process dies.
+- **A directory cannot be flushed.** Windows has no equivalent, so a crash
+  immediately after a rename can lose that rename. It cannot produce a
+  half-written file — contents are flushed before the rename as everywhere else
+  — so what is lost is a completed operation, which recovery already classifies.
+  This guarantee is weaker than on Unix.
 
 `safescope guard` is macOS only, through `sandbox-exec`, and refuses elsewhere
 rather than running a command unprotected. Everything else — the policy, the
-hook, the allowlist, drift detection — works on both.
-
-Windows is not supported and will not compile. The engine depends on atomic
-rename flags and an advisory lock it has no equivalent for, and refusing what a
-platform cannot do properly is deliberate rather than an omission.
+hook, the allowlist, drift detection — is on every platform.
 
 ## Installing
 

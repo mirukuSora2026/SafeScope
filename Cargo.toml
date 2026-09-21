@@ -46,6 +46,15 @@ unicode-normalization = "0.1.25"
 unicode-width = "0.2.2"
 uuid = { version = "1.26.1", features = ["v4", "serde"] }
 
+# Win32 for the three calls Windows spells differently: a handle-relative
+# no-overwrite rename, an advisory lock, and the directory flush it does not have.
+[target.'cfg(windows)'.dependencies]
+windows-sys = { version = "0.60.2", features = [
+    "Win32_Foundation",
+    "Win32_Storage_FileSystem",
+    "Win32_System_IO",
+] }
+
 [dev-dependencies]
 serde_json = "1.0.151"
 tempfile = "3.27.0"

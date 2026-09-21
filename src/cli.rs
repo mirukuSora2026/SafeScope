@@ -181,7 +181,16 @@ fn dispatch(cli: &Cli) -> Result<i32> {
             action: PolicyAction::Show,
         } => approve::show(&cli.workspace).map(|()| exit::OK),
         Command::Status => report::status(&cli.workspace),
+        #[cfg(unix)]
         Command::Guard { command } => crate::guard::run(&cli.workspace, command),
+        #[cfg(windows)]
+        Command::Guard { .. } => Err(Error::Denied(
+            crate::error::Denial::new(
+                crate::error::ErrorCode::UnsupportedOperation,
+                crate::dataformatting::Msg::GuardUnsupportedHere,
+            )
+            .with_hint(crate::dataformatting::Msg::HintGuardNeedsSandbox),
+        )),
         Command::Drift { action } => match action {
             None => report::drift(&cli.workspace),
             Some(DriftAction::Accept) => repair::accept_drift(&cli.workspace),

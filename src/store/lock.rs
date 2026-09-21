@@ -16,6 +16,7 @@
 use std::fs::File;
 use std::path::{Path, PathBuf};
 
+#[cfg(unix)]
 use rustix::fs::{FlockOperation, flock};
 
 use crate::dataformatting::Msg;
@@ -58,6 +59,7 @@ impl WorkspaceLock {
         // a busy workspace once made a signal arriving mid-call — EINTR, which
         // says nothing about the lock — look like a second session, and the
         // advice that came with it was to close a session that did not exist.
+        #[cfg(unix)]
         loop {
             match flock(&file, FlockOperation::NonBlockingLockExclusive) {
                 Ok(()) => break,
@@ -75,6 +77,27 @@ impl WorkspaceLock {
                 }
                 Err(errno) => return Err(write_failed(path, &std::io::Error::from(errno))),
             }
+        }
+
+        // `LockFileEx` with `LOCKFILE_FAIL_IMMEDIATELY` is the same bargain: it
+        // refuses rather than waits, and the lock is released with the handle,
+        // including when the process dies.
+        #[cfg(windows)]
+        if let Err(error) =
+            crate::platform::windows::try_lock_exclusive(crate::platform::windows::handle_of(&file))
+        {
+            if crate::platform::windows::is_already_locked(&error) {
+                return Err(Error::Faulted(
+                    Fault::new(
+                        ErrorCode::WorkspaceBusy,
+                        Msg::WorkspaceBusyElsewhere {
+                            path: path.display().to_string(),
+                        },
+                    )
+                    .with_hint(Msg::HintAnotherSessionIsWriting),
+                ));
+            }
+            return Err(write_failed(path, &error));
         }
 
         Ok(Self {

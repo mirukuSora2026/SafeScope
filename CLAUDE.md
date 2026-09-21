@@ -79,6 +79,9 @@ the tests.
   the change budget. Protected paths still apply. Checking either would trap
   people: a rule allowing `create` but not `trash` would let the engine make a
   file it then refuses to remove.
+- A platform is supported when it has been run, not when it compiles. The first
+  Linux run found every directory flush failing with EBADF, on code that had
+  built cleanly for months. Say "compiles, never run" until CI says otherwise.
 - Refuse what the platform cannot do properly; never emulate it. A no-overwrite
   rename that falls back to checking first reopens the race the flag closes, and
   a cross-filesystem move done as copy-then-delete is not one operation.
