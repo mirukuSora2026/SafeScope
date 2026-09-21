@@ -18,9 +18,15 @@
 //!   is not one operation: a crash in the middle leaves the file in two places
 //!   or none, and the journal would have recorded a move.
 
+// `renameatx_np` takes raw descriptors and C strings; the Linux path takes
+// neither, so these are scoped to the platform that uses them rather than
+// tolerated as unused everywhere else.
+#[cfg(target_os = "macos")]
 use std::ffi::CString;
 use std::io::Write as _;
-use std::os::fd::{AsFd, AsRawFd};
+use std::os::fd::AsFd;
+#[cfg(target_os = "macos")]
+use std::os::fd::AsRawFd;
 
 use cap_std::fs::Dir;
 
@@ -116,9 +122,26 @@ pub fn remove(directory: &Dir, name: &str) -> Result<()> {
 }
 
 /// Flushes a directory's own metadata, so a rename or unlink survives a crash.
+///
+/// The descriptor is reopened rather than flushed directly. On Linux `cap-std`
+/// opens a directory with `O_PATH`, which names a file without granting access
+/// to it, and `fsync` on one fails with `EBADF`. macOS has no `O_PATH`, so the
+/// direct call worked there and every durability guarantee in this file was
+/// quietly unenforced on Linux.
+///
+/// Reopening through the same descriptor keeps the capability — `openat` on
+/// `"."` cannot escape the directory it is relative to — while producing one the
+/// kernel will actually flush.
 pub fn fsync(directory: &Dir, operation: &str) -> Result<()> {
-    rustix::fs::fsync(directory.as_fd())
-        .map_err(|error| failed(operation, &std::io::Error::from(error)))
+    let flushable = rustix::fs::openat(
+        directory.as_fd(),
+        ".",
+        rustix::fs::OFlags::RDONLY | rustix::fs::OFlags::DIRECTORY | rustix::fs::OFlags::CLOEXEC,
+        rustix::fs::Mode::empty(),
+    )
+    .map_err(|error| failed(operation, &std::io::Error::from(error)))?;
+
+    rustix::fs::fsync(&flushable).map_err(|error| failed(operation, &std::io::Error::from(error)))
 }
 
 /// Whether the destination may be replaced.

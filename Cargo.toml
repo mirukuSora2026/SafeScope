@@ -2,6 +2,13 @@
 name = "safescope"
 version = "0.1.0"
 edition = "2024"
+license = "MIT"
+description = "Keeps AI file changes inside an approved scope and budget, and records them so they can be reviewed and undone."
+readme = "plugin/README.md"
+# Not "sandbox": only `safescope guard` is one, and the rest of this crate is
+# careful to say it is not. A keyword that oversells it would undo that.
+keywords = ["claude", "mcp", "audit", "undo", "provenance"]
+categories = ["command-line-utilities", "development-tools"]
 
 [[bin]]
 name = "safescope"

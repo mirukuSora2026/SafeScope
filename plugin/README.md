@@ -13,15 +13,22 @@ The status output says so, and so should you.
 
 ## Where this runs
 
-Built and tested on macOS (Apple silicon). That is the only configuration any
-claim here has been measured on.
+| | engine | `safescope guard` |
+|---|---|---|
+| macOS (Apple silicon) | every gate, 403 tests | yes |
+| Linux (arm64) | every gate, 394 tests | no — refuses |
+| Windows | does not compile | no |
 
-Linux should build — the no-overwrite rename has a `renameat2` path — but it has
-not been compiled or run there, so treat it as untried rather than supported.
-`safescope guard` is macOS only and refuses elsewhere rather than running a
-command unprotected. Windows is not supported and will not compile: the engine
-depends on atomic rename flags and an advisory lock it has no equivalent for,
-and refusing what a platform cannot do properly is deliberate.
+Both rows were run, not inferred. The nine tests the Linux run does not have are
+the guard's own, which are `cfg`-gated to the platform that has a sandbox.
+
+`safescope guard` is macOS only, through `sandbox-exec`, and refuses elsewhere
+rather than running a command unprotected. Everything else — the policy, the
+hook, the allowlist, drift detection — works on both.
+
+Windows is not supported and will not compile. The engine depends on atomic
+rename flags and an advisory lock it has no equivalent for, and refusing what a
+platform cannot do properly is deliberate rather than an omission.
 
 ## Installing
 

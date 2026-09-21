@@ -1,0 +1,72 @@
+# Every gate the project holds itself to, on every push.
+#
+# Five of the eight bugs found by running this against real agent sessions lived
+# in the gap between "the manifest is valid" and "the host loads it", and each
+# one passed a green test suite. A regression there is silent by nature, so it
+# has to be checked by something that runs whether or not anybody remembers to.
+name: verify
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  CARGO_TERM_COLOR: always
+  RUST_BACKTRACE: 1
+
+jobs:
+  macos:
+    # The only platform any claim in this repository has been measured on, and
+    # the only one where `safescope guard` exists at all.
+    name: macOS
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
+      - uses: Swatinem/rust-cache@v2
+      - name: Every gate
+        run: ./scripts/verify.sh
+
+  linux:
+    # Kept separate and allowed to fail on its own: the engine's no-overwrite
+    # rename takes a different kernel call here, and the guard does not exist.
+    # A red square on this job should say "Linux broke", not "the build broke".
+    name: Linux
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
+      - uses: Swatinem/rust-cache@v2
+      - name: Every gate
+        run: ./scripts/verify.sh
+
+  packaged:
+    # The plugin as somebody installs it, not as the tests rebuild it. The
+    # binary the manifest names is not checked in, so this is the job that would
+    # have caught a release whose plugin loads and silently does nothing.
+    name: packaged plugin
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - name: Build the plugin
+        run: ./scripts/build-plugin.sh
+      - name: The manifests name a binary that answers
+        run: cargo test --test plugin_package
+      - uses: actions/upload-artifact@v4
+        with:
+          name: safescope-plugin-macos
+          path: |
+            plugin/
+            LICENSE
+          if-no-files-found: error
