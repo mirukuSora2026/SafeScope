@@ -11,11 +11,27 @@ by a shell command is not recorded and cannot be undone through it.
 
 The status output says so, and so should you.
 
+## Where this runs
+
+Built and tested on macOS (Apple silicon). That is the only configuration any
+claim here has been measured on.
+
+Linux should build — the no-overwrite rename has a `renameat2` path — but it has
+not been compiled or run there, so treat it as untried rather than supported.
+`safescope guard` is macOS only and refuses elsewhere rather than running a
+command unprotected. Windows is not supported and will not compile: the engine
+depends on atomic rename flags and an advisory lock it has no equivalent for,
+and refusing what a platform cannot do properly is deliberate.
+
 ## Installing
 
 ```bash
 ./scripts/build-plugin.sh     # builds the engine into plugin/bin/
 ```
+
+The binary is not checked in, so that step is not optional: the manifest names
+`bin/safescope`, and a manifest whose binary is absent is a plugin that loads
+and silently does nothing.
 
 Then add the plugin directory in Claude Code. In the project:
 

@@ -338,3 +338,42 @@ fn the_readme_does_not_promise_a_sandbox() {
         "the tool that got past a Bash deny has to be named"
     );
 }
+
+#[test]
+fn the_packaged_plugin_answers_where_the_manifest_says_it_is() {
+    // Every other test here substitutes the test binary for the path the
+    // manifest names, which proves the engine answers and says nothing about
+    // whether the plugin somebody installs has one. `bin/safescope` is built by
+    // a script and not checked in, so a clone that skipped it has a manifest
+    // pointing at nothing — and a plugin whose binary never answers is a plugin
+    // that silently does nothing, which is the failure this project exists to
+    // stop shipping.
+    let packaged = plugin_root().join("bin").join("safescope");
+    assert!(
+        packaged.is_file(),
+        "{} is missing: run ./scripts/build-plugin.sh",
+        packaged.display()
+    );
+
+    let workspace = TempDir::new().expect("workspace");
+    let output = Command::new(&packaged)
+        .arg("--workspace")
+        .arg(workspace.path())
+        .arg("--help")
+        .env("SAFESCOPE_LANG", "en")
+        .output()
+        .expect("the packaged binary runs");
+
+    assert!(
+        output.status.success(),
+        "the packaged binary did not answer: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    let help = String::from_utf8_lossy(&output.stdout);
+    for command in ["guard", "drift", "mcp", "hook"] {
+        assert!(
+            help.contains(command),
+            "the packaged binary is missing `{command}`; it may be a stale build"
+        );
+    }
+}
