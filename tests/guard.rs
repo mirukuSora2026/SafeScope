@@ -293,17 +293,34 @@ fn a_second_guard_on_the_same_workspace_is_refused() {
         .spawn()
         .expect("first guard");
 
-    // Waited for rather than slept past: the socket exists once the command has
-    // started, and a delay would be a race dressed as a test.
+    // Waited for rather than slept past. And checked: `read_line` returns Ok(0)
+    // at end of file, so a first guard that died immediately would have let this
+    // sail on and then "prove" that a second one is refused by nothing at all.
+    //
+    // The reader is held in a binding for the rest of the test rather than left
+    // as a temporary. Dropped at the end of this statement it closes the read
+    // end of the pipe, the guarded command takes SIGPIPE on its next write, and
+    // the guard tidies its socket away — after which a second guard is refused
+    // by nothing, which is precisely what this is supposed to catch.
+    let mut reader = std::io::BufReader::new(first.stdout.take().expect("stdout"));
     let mut announcement = String::new();
-    std::io::BufRead::read_line(
-        &mut std::io::BufReader::new(first.stdout.take().expect("stdout")),
-        &mut announcement,
-    )
-    .expect("read");
+    std::io::BufRead::read_line(&mut reader, &mut announcement).expect("read");
+    assert!(
+        !announcement.trim().is_empty(),
+        "the first guard said nothing, so it is not holding anything"
+    );
+
+    let socket = guard::socket_path(root.path()).expect("socket path");
+    assert!(
+        socket.exists(),
+        "the first guard is not listening at {}, so the rest of this test means nothing",
+        socket.display()
+    );
 
     let second = guarded(data.path(), root.path(), "echo should not run");
 
+    // Held until here, so the guarded command still has somewhere to write.
+    drop(reader);
     first.kill().expect("kill");
     first.wait().expect("reap");
 
