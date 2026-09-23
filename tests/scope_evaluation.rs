@@ -324,3 +324,95 @@ fn a_move_into_the_allowed_scope_from_outside_is_refused() {
     assert!(!decision.is_allowed());
     assert!(!decision.source.is_allowed());
 }
+
+#[test]
+fn a_grant_opens_an_operation_a_rule_matched_but_did_not_permit() {
+    // `src/main/resources/**` allows only `replace`. Asking to trash a file
+    // there is refused with "an expansion may be requested" — so a grant for
+    // exactly that path and operation has to be honoured. If it is not, a client
+    // that takes the hint, obtains the expansion and retries is told the same
+    // thing again, forever.
+    let policy = compiled(POLICY);
+    let task = TaskId::new();
+    let target = path("src/main/resources/config.yml");
+
+    let grants = vec![Grant::new(
+        task,
+        PolicyVersion::FIRST,
+        vec![target.clone()],
+        [Operation::Trash].into_iter().collect(),
+        ApprovalSource::Terminal,
+        SystemTime::now() + Duration::from_secs(600),
+    )];
+
+    let decision = evaluate(&target, Operation::Trash, &policy, &context(&grants, task));
+    assert!(
+        decision.is_allowed(),
+        "the granted expansion was never consulted: {decision:?}"
+    );
+}
+
+#[test]
+fn a_grant_for_another_operation_does_not_open_this_one() {
+    // The grant moved ahead of the refusal; it must not have widened on the way.
+    let policy = compiled(POLICY);
+    let task = TaskId::new();
+    let target = path("src/main/resources/config.yml");
+
+    let grants = vec![Grant::new(
+        task,
+        PolicyVersion::FIRST,
+        vec![target.clone()],
+        [Operation::Move].into_iter().collect(),
+        ApprovalSource::Terminal,
+        SystemTime::now() + Duration::from_secs(600),
+    )];
+
+    let decision = evaluate(&target, Operation::Trash, &policy, &context(&grants, task));
+    assert!(!decision.is_allowed(), "a grant for move opened trash");
+}
+
+#[test]
+fn a_grant_cannot_open_a_denied_path_even_for_an_allowed_operation() {
+    // Deny is final, and it returns before the grant is ever read. Moving the
+    // grant earlier must not have moved it above that.
+    let policy = compiled(POLICY);
+    let task = TaskId::new();
+    let target = path("src/main/java/auth/.env");
+
+    let grants = vec![Grant::new(
+        task,
+        PolicyVersion::FIRST,
+        vec![target.clone()],
+        [Operation::Replace].into_iter().collect(),
+        ApprovalSource::Terminal,
+        SystemTime::now() + Duration::from_secs(600),
+    )];
+
+    let decision = evaluate(
+        &target,
+        Operation::Replace,
+        &policy,
+        &context(&grants, task),
+    );
+    assert!(!decision.is_allowed(), "a grant overrode a deny rule");
+}
+
+#[test]
+fn an_expired_grant_does_not_open_a_refused_operation() {
+    let policy = compiled(POLICY);
+    let task = TaskId::new();
+    let target = path("src/main/resources/config.yml");
+
+    let grants = vec![Grant::new(
+        task,
+        PolicyVersion::FIRST,
+        vec![target.clone()],
+        [Operation::Trash].into_iter().collect(),
+        ApprovalSource::Terminal,
+        SystemTime::now() - Duration::from_secs(1),
+    )];
+
+    let decision = evaluate(&target, Operation::Trash, &policy, &context(&grants, task));
+    assert!(!decision.is_allowed(), "an expired grant was honoured");
+}

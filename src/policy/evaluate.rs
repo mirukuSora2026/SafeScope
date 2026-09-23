@@ -6,10 +6,17 @@
 //! ```text
 //! 1. protected (built in)  → refuse; no approval can lift it
 //! 2. deny (policy)         → refuse; no approval can lift it
-//! 3. allow (policy)        → permit, or refuse this operation
+//! 3. allow (policy)        → permit
 //! 4. grant (temporary)     → permit
-//! 5. nothing matched       → not covered; an expansion may be requested
+//! 5. allow matched the path but not the operation → refuse that operation
+//! 6. nothing matched       → not covered
 //! ```
+//!
+//! Steps 5 and 6 both say an expansion may be requested, which is why the grant
+//! is consulted before them and not after. A grant *is* an expansion; one read
+//! only after those refusals had returned could never be used, and a client
+//! that took the hint, obtained one and tried again would be told the same
+//! thing forever.
 //!
 //! Two consequences of that order are deliberate.
 //!
@@ -207,6 +214,24 @@ pub fn evaluate(
         };
     }
 
+    // Before the refusals below, not after. Both of them tell a caller that an
+    // expansion may be requested, and a grant is what an expansion is — so a
+    // grant consulted only after they returned is a grant that can never be
+    // used, and a client that takes the hint, obtains one and retries is told
+    // exactly the same thing again.
+    if let Some(grant) = context.grants.iter().find(|grant| {
+        grant.is_usable(context.task, context.policy_version, context.now)
+            && grant.covers(path, operation)
+    }) {
+        return Decision::Allow {
+            rule: RuleRef {
+                source: RuleSource::Grant(grant.id),
+                pattern: None,
+                line: None,
+            },
+        };
+    }
+
     if let Some(first) = matching.first() {
         // The path is in scope, but this operation is not. That is a narrower
         // refusal than "out of scope", and an expansion can still open it.
@@ -230,19 +255,6 @@ pub fn evaluate(
                 },
             )
             .with_hint(Msg::HintExpansionMayBeRequested),
-        };
-    }
-
-    if let Some(grant) = context.grants.iter().find(|grant| {
-        grant.is_usable(context.task, context.policy_version, context.now)
-            && grant.covers(path, operation)
-    }) {
-        return Decision::Allow {
-            rule: RuleRef {
-                source: RuleSource::Grant(grant.id),
-                pattern: None,
-                line: None,
-            },
         };
     }
 
