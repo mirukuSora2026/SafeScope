@@ -303,3 +303,20 @@ fn reading_an_unregistered_project_says_what_to_do() {
         assert!(stderr(&output).contains("safescope init"), "{command}");
     }
 }
+
+#[test]
+fn the_doctor_says_when_a_change_is_not_durable_here() {
+    // Only where the platform cannot flush a directory. The module said for a
+    // while that the status output reported this; it did not, and a doc comment
+    // asserting something nobody had written is the failure this pins shut.
+    let _guard = env_lock();
+    let (data, root) = workspace();
+
+    let output = stdout(&run(data.path(), root.path(), &["doctor"]));
+    let said = output.contains("cannot flush a directory");
+    assert_eq!(
+        said,
+        !safescope::platform::rename_is_durable(),
+        "what the doctor says and what the platform does must agree: {output}"
+    );
+}

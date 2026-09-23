@@ -126,16 +126,13 @@ fn translate(error: std::io::Error) -> std::io::Error {
         return std::io::Error::new(std::io::ErrorKind::AlreadyExists, error);
     }
     if code == ERROR_NOT_SAME_DEVICE {
-        return std::io::Error::from_raw_os_error(libc_exdev());
+        // The kind, not a POSIX number. `from_raw_os_error` on Windows reads its
+        // argument as a Win32 code, so EXDEV's 18 would have arrived as "there
+        // are no more files" — a match by coincidence carrying the wrong
+        // sentence for anybody who read it.
+        return std::io::Error::new(std::io::ErrorKind::CrossesDevices, error);
     }
     error
-}
-
-/// The errno the rest of the engine recognises as a cross-filesystem move.
-const fn libc_exdev() -> i32 {
-    // Windows reports this as a Win32 code; the engine's refusal is written
-    // against the POSIX one, so it is mapped rather than special-cased twice.
-    18
 }
 
 /// Makes a directory's own metadata durable — which Windows cannot do.
@@ -153,7 +150,9 @@ const fn libc_exdev() -> i32 {
 /// The journal records an operation before it runs, so recovery finds one whose
 /// recorded state is "applying" and whose workspace still matches the state from
 /// before. That is a case it already classifies and reports rather than guesses
-/// at. The guarantee is weaker than on Unix and the status output says so.
+/// at. The guarantee is weaker than on Unix, and [`super::rename_is_durable`] is
+/// false here so `safescope doctor` says so to the person who has to decide
+/// whether to trust what is on disk.
 pub fn flush_directory(_directory: &Dir) -> std::io::Result<()> {
     Ok(())
 }

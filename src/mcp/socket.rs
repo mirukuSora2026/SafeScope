@@ -120,7 +120,13 @@ pub async fn serve(
             },
             _ = &mut shutdown => return Ok(()),
         };
-        let server = SafeScope::open(&root)?;
+        // Not `?`: one connection failing must not stop the guard answering the
+        // next. The guard has already told the person the workspace is sealed,
+        // so an engine that quietly stopped listening would leave every later
+        // tool call hitting a dead socket with no way through.
+        let Ok(server) = SafeScope::open(&root) else {
+            continue;
+        };
         let running = match rmcp::ServiceExt::serve(server, stream).await {
             Ok(running) => running,
             // A client that hangs up during the handshake is not this server's

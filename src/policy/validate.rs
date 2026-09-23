@@ -12,7 +12,7 @@ use crate::dataformatting::Msg;
 use crate::domain::OpSet;
 use crate::error::{Denial, ErrorCode};
 
-use super::file::PolicyDocument;
+use super::file::{EnforcementMode, PolicyDocument};
 use super::matcher::{CaseSensitivity, Pattern};
 use super::normalized::NormalizedPolicy;
 use super::protected::{ProtectedPaths, patterns_overlap};
@@ -123,8 +123,45 @@ pub fn validate(
     check_duplicates(policy, &mut report);
     check_deny_reaches_something(policy, &mut report);
     check_budget(policy, &mut report);
+    check_enforcement(policy, &mut report);
 
     report
+}
+
+/// Tools that can run a shell command, and therefore change a file unrecorded.
+///
+/// Measured rather than imagined: with the edit tools denied, real sessions
+/// reached for these in turn, and two of them succeeded. Naming one in
+/// `allow_tools` gives that route back.
+const SHELL_ROUTES: [&str; 5] = ["Bash", "Monitor", "Agent", "Task", "Skill"];
+
+/// Warnings, not errors: both of these are a person's call to make.
+///
+/// One is a list that does nothing, and the other is a list that undoes the
+/// mode it is written in. Neither is wrong to want; both are wrong to discover
+/// later, which is what happens when approval says nothing about them.
+fn check_enforcement(policy: &NormalizedPolicy, report: &mut ValidationReport) {
+    let enforcement = &policy.enforcement;
+    if enforcement.allow_tools.is_empty() {
+        return;
+    }
+
+    if enforcement.mode != EnforcementMode::Allowlist {
+        report.push(Diagnostic::warning(
+            Msg::PolicyAllowToolsWithoutAllowlist,
+            None,
+        ));
+        return;
+    }
+
+    for tool in &enforcement.allow_tools {
+        if SHELL_ROUTES.contains(&tool.as_str()) {
+            report.push(Diagnostic::warning(
+                Msg::PolicyAllowToolsReopensTheGap { tool: tool.clone() },
+                None,
+            ));
+        }
+    }
 }
 
 fn check_scope_is_usable(
@@ -299,182 +336,4 @@ fn check_budget(policy: &NormalizedPolicy, report: &mut ValidationReport) {
 /// Whether a pattern reaches every file in the workspace.
 fn is_workspace_wide(pattern: &str) -> bool {
     matches!(pattern.trim(), "**" | "**/*" | "**/**")
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    fn report_for(text: &str) -> ValidationReport {
-        let document = PolicyDocument::parse(text).expect("parses");
-        let policy = NormalizedPolicy::from_document(&document);
-        validate(&document, &policy, &ProtectedPaths::engine_defaults())
-    }
-
-    fn error_messages(report: &ValidationReport) -> Vec<&str> {
-        report
-            .errors()
-            .map(|entry| entry.message.as_str())
-            .collect()
-    }
-
-    const USABLE: &str = "schema_version = 1\n[scope]\nallow = [\"src/**\"]\n";
-
-    #[test]
-    fn a_usable_policy_has_no_errors() {
-        let report = report_for(USABLE);
-        assert!(!report.has_errors(), "{:?}", error_messages(&report));
-        assert!(report.to_denial().is_none());
-    }
-
-    #[test]
-    fn rejects_a_policy_with_no_allow_rules() {
-        let report = report_for("schema_version = 1\n[scope]\ndeny = [\"**/.env\"]\n");
-        assert!(report.has_errors());
-        assert!(report.to_denial().is_some());
-    }
-
-    #[test]
-    fn rejects_an_explicitly_empty_default_operations_list() {
-        let report =
-            report_for("schema_version = 1\n[scope]\nallow = [\"src/**\"]\ndefault_ops = []\n");
-        assert!(report.has_errors());
-        // Both the empty list and the rule it renders useless are reported.
-        assert_eq!(report.errors().count(), 2);
-    }
-
-    #[test]
-    fn rejects_a_rule_that_grants_nothing() {
-        let report = report_for(
-            "schema_version = 1\n\
-             \n\
-             [[scope.allow_rule]]\n\
-             path = \"src/**\"\n\
-             ops = []\n",
-        );
-        assert!(report.has_errors());
-        let denial = report.to_denial().expect("denial");
-        assert_eq!(denial.code(), ErrorCode::PolicyInvalid);
-        assert!(
-            denial.message().contains("policy.toml:4"),
-            "{}",
-            denial.message()
-        );
-    }
-
-    #[test]
-    fn rejects_an_allow_rule_over_a_protected_path() {
-        // The check that matters most: silently ignoring this would leave the
-        // author believing they granted something they did not.
-        let report = report_for("schema_version = 1\n[scope]\nallow = [\".git/**\"]\n");
-        assert!(report.has_errors());
-    }
-
-    #[test]
-    fn rejects_a_workspace_wide_rule_without_the_opt_in() {
-        let report = report_for("schema_version = 1\n[scope]\nallow = [\"**\"]\n");
-        assert!(report.has_errors());
-        assert_eq!(
-            report.errors().count(),
-            1,
-            "one finding, not one per protected path"
-        );
-    }
-
-    #[test]
-    fn accepts_a_workspace_wide_rule_with_the_opt_in() {
-        let report = report_for(
-            "schema_version = 1\n\
-             [scope]\n\
-             allow = [\"**\"]\n\
-             \n\
-             [safety]\n\
-             unsafe_allow_workspace_wide = true\n",
-        );
-        assert!(!report.has_errors(), "{:?}", error_messages(&report));
-    }
-
-    #[test]
-    fn rejects_a_pattern_that_is_both_allowed_and_denied() {
-        let report =
-            report_for("schema_version = 1\n[scope]\nallow = [\"src/**\"]\ndeny = [\"src/**\"]\n");
-        assert!(report.has_errors());
-    }
-
-    #[test]
-    fn rejects_a_zero_budget() {
-        let report = report_for(&format!("{USABLE}\n[budget]\nmax_operations = 0\n"));
-        assert!(report.has_errors());
-    }
-
-    #[test]
-    fn rejects_a_file_limit_larger_than_the_snapshot_limit() {
-        let report = report_for(&format!(
-            "{USABLE}\n[budget]\nmax_file_bytes = 2048\nmax_snapshot_bytes = 1024\n"
-        ));
-        assert!(report.has_errors());
-    }
-
-    #[test]
-    fn rejects_a_warning_ratio_outside_its_range() {
-        for ratio in ["0.0", "1.5", "-0.2"] {
-            let report = report_for(&format!("{USABLE}\n[budget]\nwarn_at_ratio = {ratio}\n"));
-            assert!(
-                report.has_errors(),
-                "warn_at_ratio = {ratio} should be rejected"
-            );
-        }
-    }
-
-    #[test]
-    fn warns_about_a_duplicate_pattern_without_blocking() {
-        let report = report_for("schema_version = 1\n[scope]\nallow = [\"src/**\", \"src/**\"]\n");
-        assert!(!report.has_errors());
-        assert_eq!(report.warnings().count(), 1);
-    }
-
-    #[test]
-    fn warns_about_a_deny_rule_that_reaches_nothing() {
-        let report =
-            report_for("schema_version = 1\n[scope]\nallow = [\"src/**\"]\ndeny = [\"docs/**\"]\n");
-        assert!(!report.has_errors());
-        assert_eq!(report.warnings().count(), 1);
-    }
-
-    #[test]
-    fn a_deny_rule_that_reaches_an_allowed_path_is_not_warned_about() {
-        let report = report_for(
-            "schema_version = 1\n[scope]\nallow = [\"src/**\"]\ndeny = [\"src/generated/**\"]\n",
-        );
-        assert_eq!(report.warnings().count(), 0);
-    }
-
-    #[test]
-    fn every_error_is_reported_at_once() {
-        // Fixing one finding per approval attempt is a poor use of an afternoon.
-        let report = report_for(
-            "schema_version = 1\n\
-             [scope]\n\
-             allow = [\".git/**\"]\n\
-             \n\
-             [budget]\n\
-             max_operations = 0\n\
-             warn_at_ratio = 3.0\n",
-        );
-        assert!(
-            report.errors().count() >= 3,
-            "{:?}",
-            error_messages(&report)
-        );
-        let denial = report.to_denial().expect("denial");
-        assert_eq!(denial.message().lines().count(), report.errors().count());
-    }
-
-    #[test]
-    fn the_starter_policy_is_rejected_until_it_is_filled_in() {
-        // It grants nothing on purpose, and validation says so rather than
-        // approving a policy that can never permit anything.
-        let report = report_for(&super::super::normalized::starter_policy_text());
-        assert!(report.has_errors());
-    }
 }

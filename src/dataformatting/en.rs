@@ -234,6 +234,22 @@ command without it and use `safescope drift` to see what changed around the engi
             "Guarding {path}. Nothing this command starts can write there; changes have to \
              go through SafeScope."
         ),
+        Msg::DurabilityLimitedHere => {
+            "This platform cannot flush a directory, so a crash immediately after a change \
+can lose that change. It cannot leave a half-written file, and `safescope recover` \
+reports anything it finds."
+                .to_owned()
+        }
+        Msg::PolicyAllowToolsWithoutAllowlist => {
+            "`allow_tools` is set but the mode is `audit`, where nothing is refused by \
+name — so the list has no effect. Set `mode = \"allowlist\"` if it was meant to."
+                .to_owned()
+        }
+        Msg::PolicyAllowToolsReopensTheGap { tool } => format!(
+            "`allow_tools` names `{tool}`, which can run a shell command. Allowing it \
+             reopens the route the allowlist exists to close; changes made that way are \
+             not recorded."
+        ),
         Msg::RecoveryFoundNothing => "Nothing needed recovering.".to_owned(),
         Msg::RecoverySettled { aborted, committed } => {
             format!("Settled {committed} operation(s) that had run and {aborted} that had not.")

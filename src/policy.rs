@@ -21,6 +21,7 @@ pub use self::evaluate::{
 pub use self::file::{EnforcementMode, PolicyDocument, PolicyFile};
 pub use self::grant::{ApprovalSource, Grant};
 pub use self::matcher::{CaseSensitivity, Pattern, PatternSet};
+pub use self::normalized::starter_policy_text;
 pub use self::normalized::{
     AllowEntry, BudgetLimits, CompiledPolicy, DenyEntry, EnforcementSettings, NormalizedPolicy,
 };

@@ -237,6 +237,17 @@ SafeScope が把握しているのはこれらのツールを通した変更だ�
             "{path} を保護します。このコマンドが起動するものは一切そこへ書き込めず、\
              変更は SafeScope を経由する必要があります。"
         ),
+        Msg::DurabilityLimitedHere => "このプラットフォームはディレクトリをフラッシュできないため、変更直後のクラッシュで\
+その変更が失われることがあります。書きかけのファイルが残ることはなく、見つかったものは \
+`safescope recover` が報告します。"
+            .to_owned(),
+        Msg::PolicyAllowToolsWithoutAllowlist => "`allow_tools` が設定されていますが、モードは `audit` です。audit では名前による拒否を\
+行わないため、この一覧は効果を持ちません。意図したものであれば `mode = \"allowlist\"` を設定してください。"
+            .to_owned(),
+        Msg::PolicyAllowToolsReopensTheGap { tool } => format!(
+            "`allow_tools` に `{tool}` が含まれています。シェルコマンドを実行できるツールのため、\
+             許可するとこのモードが閉じようとしていた経路が再び開きます。その経路での変更は記録されません。"
+        ),
         Msg::RecoveryFoundNothing => "復旧が必要なものはありませんでした。".to_owned(),
         Msg::RecoverySettled { aborted, committed } => {
             format!("実行された操作 {committed} 件と、されなかった {aborted} 件を確定しました。")

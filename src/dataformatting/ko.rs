@@ -233,6 +233,20 @@ SafeScope 는 이 도구들을 거친 변경만 압니다. 셸 명령이 쓴 것
             "{path}을(를) 보호합니다. 이 명령이 시작하는 어떤 것도 그곳에 쓸 수 없으며, \
              변경은 SafeScope를 거쳐야 합니다."
         ),
+        Msg::DurabilityLimitedHere => {
+            "이 플랫폼은 디렉터리를 flush할 수 없어, 변경 직후 크래시가 나면 그 변경을 잃을 수 \
+있습니다. 반쯤 쓰인 파일이 남지는 않으며, 발견된 것은 `safescope recover`가 보고합니다."
+                .to_owned()
+        }
+        Msg::PolicyAllowToolsWithoutAllowlist => {
+            "`allow_tools`가 설정됐지만 모드가 `audit`입니다. audit에서는 이름으로 거부하지 \
+않으므로 이 목록은 아무 효과가 없습니다. 의도한 것이라면 `mode = \"allowlist\"`로 설정하세요."
+                .to_owned()
+        }
+        Msg::PolicyAllowToolsReopensTheGap { tool } => format!(
+            "`allow_tools`에 `{tool}`이(가) 있습니다. 셸 명령을 실행할 수 있는 도구라, \
+             허용하면 이 모드가 막으려던 경로가 다시 열립니다. 그렇게 만든 변경은 기록되지 않습니다."
+        ),
         Msg::RecoveryFoundNothing => "복구할 것이 없었습니다.".to_owned(),
         Msg::RecoverySettled { aborted, committed } => {
             format!("실행된 연산 {committed}건과 실행되지 않은 {aborted}건을 확정했습니다.")

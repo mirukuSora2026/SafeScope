@@ -229,6 +229,14 @@ pub enum Msg {
     GuardStarting {
         path: String,
     },
+    /// Said where the platform cannot flush a directory.
+    DurabilityLimitedHere,
+
+    // ── Enforcement validation ─────────────────────────────────────────
+    PolicyAllowToolsWithoutAllowlist,
+    PolicyAllowToolsReopensTheGap {
+        tool: String,
+    },
 
     // ── Recovery reporting ─────────────────────────────────────────────
     RecoveryFoundNothing,

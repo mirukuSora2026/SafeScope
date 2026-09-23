@@ -148,10 +148,16 @@ pub fn run(workspace: &Path, command: &[String]) -> Result<i32> {
         }
     );
 
-    let status = sandboxed(program, arguments, &root, &profile_path)
-        .env(SOCKET_ENV, &socket_path)
-        .current_dir(&root)
-        .status();
+    let status = sandboxed(program, arguments, &root, &profile_path).and_then(|mut command| {
+        command
+            .env(SOCKET_ENV, &socket_path)
+            .current_dir(&root)
+            .status()
+            .map_err(|error| match error.kind() {
+                std::io::ErrorKind::NotFound => unsupported(),
+                _ => Error::Faulted(Fault::io("could not start the guarded command", error)),
+            })
+    });
 
     // Stopped before the result is examined, so a failure to start the command
     // does not leave an engine listening on a socket nobody will connect to.
@@ -161,13 +167,8 @@ pub fn run(workspace: &Path, command: &[String]) -> Result<i32> {
     });
     let _ = std::fs::remove_file(&socket_path);
 
-    let status = status.map_err(|error| match error.kind() {
-        std::io::ErrorKind::NotFound => unsupported(),
-        _ => Error::Faulted(Fault::io("could not start the guarded command", error)),
-    })?;
-
     // A signalled child has no exit code. Reporting 0 would say it succeeded.
-    Ok(status.code().unwrap_or(1))
+    Ok(status?.code().unwrap_or(1))
 }
 
 /// The command, wrapped in whatever this kernel uses to take the workspace away.
@@ -177,14 +178,14 @@ pub fn run(workspace: &Path, command: &[String]) -> Result<i32> {
 /// must not be applied any earlier, because this process is the engine and is
 /// the one thing that still has to be able to write there.
 #[cfg(target_os = "macos")]
-fn sandboxed(program: &str, arguments: &[String], _root: &Path, profile: &Path) -> Command {
+fn sandboxed(program: &str, arguments: &[String], _root: &Path, profile: &Path) -> Result<Command> {
     let mut command = Command::new("sandbox-exec");
     command.arg("-f").arg(profile).arg(program).args(arguments);
-    command
+    Ok(command)
 }
 
 #[cfg(target_os = "linux")]
-fn sandboxed(program: &str, arguments: &[String], root: &Path, _profile: &Path) -> Command {
+fn sandboxed(program: &str, arguments: &[String], root: &Path, _profile: &Path) -> Result<Command> {
     use std::os::fd::AsRawFd as _;
     use std::os::unix::process::CommandExt as _;
 
@@ -194,25 +195,23 @@ fn sandboxed(program: &str, arguments: &[String], root: &Path, _profile: &Path) 
     // Built here, in the parent, because building it allocates and reads
     // directories — neither of which is allowed after a fork. What runs in the
     // child is two syscalls on a descriptor that is already open.
-    match landlock::build(root) {
-        Ok(ruleset) => {
-            // SAFETY: the closure runs between fork and exec and does nothing
-            // but call `prctl` and `landlock_restrict_self`, both of which are
-            // async-signal-safe. `ruleset` is moved in and stays open for the
-            // lifetime of the command.
-            unsafe {
-                command.pre_exec(move || restrict_current_thread(ruleset.as_raw_fd()));
-            }
-        }
-        Err(_) => {
-            // Refused before this point by the ABI check, so reaching here means
-            // the ruleset could not be built on a kernel that has Landlock. The
-            // command must not start unguarded, so it is replaced with one that
-            // cannot succeed rather than one that runs unprotected.
-            command = Command::new("/nonexistent/safescope-guard-failed");
-        }
+    //
+    // A failure here is reported as itself. Replacing the command with one that
+    // cannot run would keep it from starting unguarded, but the resulting
+    // "not found" was then read as "this platform has no sandbox" — which is
+    // false on a kernel that has Landlock and sends a person to fix the wrong
+    // thing.
+    let ruleset = landlock::build(root).map_err(|error| {
+        Error::Faulted(Fault::io("could not build the Landlock ruleset", error))
+    })?;
+
+    // SAFETY: the closure runs between fork and exec and does nothing but call
+    // `prctl` and `landlock_restrict_self`, both of which are async-signal-safe.
+    // `ruleset` is moved in and stays open for the lifetime of the command.
+    unsafe {
+        command.pre_exec(move || restrict_current_thread(ruleset.as_raw_fd()));
     }
-    command
+    Ok(command)
 }
 
 #[cfg(target_os = "linux")]

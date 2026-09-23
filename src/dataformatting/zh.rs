@@ -218,6 +218,18 @@ SafeScope 只了解经由这些工具所做的更改。由 shell 命令写入的
         Msg::GuardStarting { path } => {
             format!("正在保护 {path}。该命令启动的任何程序都无法写入那里，更改必须经过 SafeScope。")
         }
+        Msg::DurabilityLimitedHere => {
+            "此平台无法刷新目录，因此更改后立即崩溃可能会丢失该更改。它不会留下写了一半的文件，\
+`safescope recover` 会报告发现的任何问题。"
+                .to_owned()
+        }
+        Msg::PolicyAllowToolsWithoutAllowlist => "设置了 `allow_tools`，但模式是 `audit`。audit 不按名称拒绝任何工具，因此该列表没有效果。\
+如果本意如此，请设置 `mode = \"allowlist\"`。"
+            .to_owned(),
+        Msg::PolicyAllowToolsReopensTheGap { tool } => format!(
+            "`allow_tools` 中包含 `{tool}`，它可以执行 shell 命令。允许它会重新打开该模式\
+             本要关闭的路径，通过那条路径所做的更改不会被记录。"
+        ),
         Msg::RecoveryFoundNothing => "没有需要恢复的内容。".to_owned(),
         Msg::RecoverySettled { aborted, committed } => {
             format!("已确定 {committed} 个已执行的操作和 {aborted} 个未执行的操作。")

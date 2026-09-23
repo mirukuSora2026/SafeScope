@@ -259,3 +259,41 @@ fn a_baseline_is_never_silently_replaced() {
     assert_eq!(survey.entries.len(), 1);
     assert_eq!(survey.entries[0].path.as_str(), "src/sneaked.rs");
 }
+
+#[test]
+fn a_truncated_baseline_does_not_claim_a_file_is_new() {
+    // A scan that stopped early cannot tell "this appeared" from "I never
+    // looked". Reporting it as added would name a file the agent may not have
+    // touched, and a report with invented entries is one nobody trusts.
+    let root = TempDir::new().expect("workspace");
+    fs::write(root.path().join("a.txt"), "a").expect("write");
+
+    let truncated = Baseline {
+        captured_at: std::time::SystemTime::now(),
+        truncated: true,
+        entries: Vec::new(),
+    };
+    let found = survey(root.path(), &truncated, &[]);
+    assert_eq!(found.entries.len(), 1);
+    assert_eq!(found.entries[0].change, Change::Modified, "not Added");
+    assert!(
+        found.truncated,
+        "the survey carries the baseline's truncation"
+    );
+}
+
+#[test]
+fn a_complete_baseline_does_claim_a_file_is_new() {
+    // The other half: the downgrade must cost nothing when the scan was whole.
+    let root = TempDir::new().expect("workspace");
+    fs::write(root.path().join("a.txt"), "a").expect("write");
+
+    let complete = Baseline {
+        captured_at: std::time::SystemTime::now(),
+        truncated: false,
+        entries: Vec::new(),
+    };
+    let found = survey(root.path(), &complete, &[]);
+    assert_eq!(found.entries[0].change, Change::Added);
+    assert!(!found.truncated);
+}

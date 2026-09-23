@@ -139,6 +139,12 @@ pub fn doctor(workspace: &Path) -> Result<i32> {
         (Label::PolicyFile, !status.unapproved_policy_edits),
     ];
 
+    // Not a check that can fail — it is a property of the platform, and a person
+    // deciding whether to trust what is on disk after a crash needs it said.
+    if !crate::platform::rename_is_durable() {
+        println!("  {}", Msg::DurabilityLimitedHere);
+    }
+
     let mut healthy = true;
     for (label, passed) in checks {
         let outcome = if passed { Label::Passed } else { Label::Failed };

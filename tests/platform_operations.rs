@@ -241,3 +241,64 @@ fn a_move_across_filesystems_is_refused() {
         "nothing was created on the other filesystem"
     );
 }
+
+/// A rename failure the way a platform hands one over.
+///
+/// Two shapes reach [`map_rename_error`] and only one of them carries an errno.
+/// Windows classifies before returning, so the error is a wrapper with a kind
+/// and no number; Unix returns the raw errno with the kind derived from it.
+mod rename_failures {
+    use safescope::error::ErrorCode;
+    use safescope::platform::map_rename_error;
+    use std::io::{Error, ErrorKind};
+
+    #[test]
+    fn a_taken_destination_is_a_refusal_even_without_an_errno() {
+        // The shape Windows produces. Matching the errno first sent this down
+        // the fault path, where a refusal was reported as an engine failure and
+        // a caller had no way to tell that retrying could not help.
+        let error = Error::new(ErrorKind::AlreadyExists, "destination is taken");
+        assert!(error.raw_os_error().is_none(), "the premise of this test");
+
+        let mapped = map_rename_error(&error, "a.rs", "b.rs");
+        assert_eq!(mapped.code(), ErrorCode::DestinationExists);
+        assert!(
+            matches!(mapped, safescope::error::Error::Denied(_)),
+            "a rule refusing is not the engine failing"
+        );
+    }
+
+    #[test]
+    fn a_cross_device_move_is_a_refusal_even_without_an_errno() {
+        let error = Error::new(ErrorKind::CrossesDevices, "different volume");
+        let mapped = map_rename_error(&error, "a.rs", "/other/a.rs");
+        assert_eq!(mapped.code(), ErrorCode::UnsupportedOperation);
+        assert!(matches!(mapped, safescope::error::Error::Denied(_)));
+    }
+
+    #[test]
+    fn a_taken_destination_is_still_a_refusal_when_it_is_an_errno() {
+        // The shape Unix produces, so the new path does not cost the old one.
+        let error = Error::from_raw_os_error(libc::EEXIST);
+        let mapped = map_rename_error(&error, "a.rs", "b.rs");
+        assert_eq!(mapped.code(), ErrorCode::DestinationExists);
+    }
+
+    #[test]
+    fn a_cross_device_move_is_still_a_refusal_when_it_is_an_errno() {
+        let error = Error::from_raw_os_error(libc::EXDEV);
+        let mapped = map_rename_error(&error, "a.rs", "/other/a.rs");
+        assert_eq!(mapped.code(), ErrorCode::UnsupportedOperation);
+    }
+
+    #[test]
+    fn something_the_engine_cannot_explain_stays_a_fault() {
+        // The distinction only means anything if it can still say "fault".
+        let error = Error::from_raw_os_error(libc::EIO);
+        let mapped = map_rename_error(&error, "a.rs", "b.rs");
+        assert!(
+            matches!(mapped, safescope::error::Error::Faulted(_)),
+            "an I/O failure is not a rule refusing"
+        );
+    }
+}

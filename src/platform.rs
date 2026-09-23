@@ -267,7 +267,50 @@ fn rename_no_replace(
     windows::rename_no_replace(from_directory, from_name, to_directory, to_name)
 }
 
-fn map_rename_error(error: &std::io::Error, from_name: &str, to_name: &str) -> Error {
+/// Whether a rename here is durable once it returns.
+///
+/// False where the platform cannot flush a directory. [`crate::cli::report`]
+/// asks this rather than testing the target itself, so the answer and the
+/// sentence a person reads cannot drift apart — which they already had once,
+/// with a module claiming the status output said something it never said.
+pub const fn rename_is_durable() -> bool {
+    !cfg!(windows)
+}
+
+/// Turns what a rename failed with into what the caller should be told.
+///
+/// Public because it is a pure translation and the only place an error shape
+/// becomes a decision. Testing it through a real rename can only reach the
+/// shapes the platform under the test produces, and the one that was wrong was
+/// on the platform that could not be run.
+///
+/// `kind` is checked before the errno. An error that arrived already classified
+/// carries no errno at all — `io::Error::new` wraps rather than replaces — so
+/// matching the number first sent Windows's "destination is taken" down the
+/// fault path, where a refusal was reported as an engine failure and a caller
+/// could not tell that retrying was pointless.
+pub fn map_rename_error(error: &std::io::Error, from_name: &str, to_name: &str) -> Error {
+    match error.kind() {
+        std::io::ErrorKind::AlreadyExists | std::io::ErrorKind::DirectoryNotEmpty => {
+            return Error::Denied(Denial::new(
+                ErrorCode::DestinationExists,
+                Msg::PathDestinationExists {
+                    path: to_name.to_owned(),
+                },
+            ));
+        }
+        std::io::ErrorKind::CrossesDevices => {
+            return Error::Denied(Denial::new(
+                ErrorCode::UnsupportedOperation,
+                Msg::PlatformCrossFilesystem {
+                    from: from_name.to_owned(),
+                    to: to_name.to_owned(),
+                },
+            ));
+        }
+        _ => {}
+    }
+
     match error.raw_os_error() {
         Some(libc::EEXIST) | Some(libc::ENOTEMPTY) => Error::Denied(Denial::new(
             ErrorCode::DestinationExists,
