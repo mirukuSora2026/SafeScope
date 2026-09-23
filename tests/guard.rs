@@ -266,3 +266,56 @@ fn the_socket_does_not_outlive_the_guarded_command() {
     let socket = guard::socket_path(root.path()).expect("socket path");
     assert!(!socket.exists(), "the socket was left behind");
 }
+
+#[test]
+fn a_second_guard_on_the_same_workspace_is_refused() {
+    // Not two engines on one workspace. Unlinking the socket unconditionally
+    // would have cut the first guard off from its own agent, whose later tool
+    // calls would then have been answered by the second guard's engine.
+    if !can_guard() {
+        return;
+    }
+    let _serialised = env_lock();
+    let (data, root) = workspace();
+
+    // The first guard holds its socket for as long as its command runs.
+    let mut first = Command::new(BINARY)
+        .env(DATA_DIR_ENV, data.path())
+        .env("SAFESCOPE_LANG", "en")
+        .arg("--workspace")
+        .arg(root.path())
+        .arg("guard")
+        .arg("--")
+        .arg("/bin/sh")
+        .arg("-c")
+        .arg("echo ready; sleep 30")
+        .stdout(std::process::Stdio::piped())
+        .spawn()
+        .expect("first guard");
+
+    // Waited for rather than slept past: the socket exists once the command has
+    // started, and a delay would be a race dressed as a test.
+    let mut announcement = String::new();
+    std::io::BufRead::read_line(
+        &mut std::io::BufReader::new(first.stdout.take().expect("stdout")),
+        &mut announcement,
+    )
+    .expect("read");
+
+    let second = guarded(data.path(), root.path(), "echo should not run");
+
+    first.kill().expect("kill");
+    first.wait().expect("reap");
+
+    assert_ne!(
+        second.status.code(),
+        Some(0),
+        "the second guard started anyway: {}",
+        text(&second)
+    );
+    assert!(
+        text(&second).to_lowercase().contains("another"),
+        "the refusal should say somebody else has it: {}",
+        text(&second)
+    );
+}

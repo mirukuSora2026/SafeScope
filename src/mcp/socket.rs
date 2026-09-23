@@ -75,20 +75,43 @@ pub fn path_for(id: WorkspaceId) -> Result<PathBuf> {
     Ok(path)
 }
 
-/// Binds the socket, replacing a stale one left by a process that is gone.
+/// Binds the socket, replacing one left by a process that is gone — and only one.
 ///
 /// A socket file outlives the process that bound it, so a crash leaves one that
-/// nothing is listening on. Removing it is safe here because the guard holds the
-/// workspace lock before it gets this far: if another guard were alive, this
-/// process would not have reached this point.
+/// nothing is listening on. Unlinking unconditionally would also take the socket
+/// of a guard that is very much alive: the second guard on a workspace would
+/// silently cut the first one's engine off from its own agent, which would then
+/// find its tool calls answered by somebody else's engine.
+///
+/// So a live socket is told from an abandoned one by connecting to it. A refused
+/// connection means nothing is listening and the file is debris; a connection
+/// that is accepted means another guard has this workspace, which is reported
+/// rather than taken.
+///
+/// This is the mutual exclusion, not the workspace lock. The guard cannot hold
+/// that — the engine it runs takes it for each session, and a process cannot
+/// take a lock it is already holding.
 pub fn bind(path: &Path) -> Result<UnixListener> {
     if let Some(parent) = path.parent() {
         std::fs::create_dir_all(parent).map_err(failed)?;
     }
-    match std::fs::remove_file(path) {
-        Ok(()) => {}
-        Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
-        Err(error) => return Err(failed(error)),
+    if path.exists() {
+        if std::os::unix::net::UnixStream::connect(path).is_ok() {
+            return Err(Error::Faulted(
+                Fault::new(
+                    ErrorCode::WorkspaceBusy,
+                    Msg::WorkspaceBusyElsewhere {
+                        path: path.display().to_string(),
+                    },
+                )
+                .with_hint(Msg::HintAnotherSessionIsWriting),
+            ));
+        }
+        match std::fs::remove_file(path) {
+            Ok(()) => {}
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
+            Err(error) => return Err(failed(error)),
+        }
     }
     let listener = UnixListener::bind(path).map_err(failed)?;
 
