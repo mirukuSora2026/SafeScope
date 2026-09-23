@@ -26,7 +26,7 @@
 use std::time::SystemTime;
 
 use crate::budget::Budget;
-use crate::domain::{Operation, PathState, Phase};
+use crate::domain::{Observation, Operation, PathState, Phase};
 use crate::error::{Error, Result};
 use crate::fault::{self, FaultPoint};
 use crate::hash::ContentHash;
@@ -149,9 +149,14 @@ impl Executor<'_> {
         fault::check(FaultPoint::AfterApplyingRecord);
 
         if let Err(error) = self.perform(plan) {
-            // Every filesystem step either happened or did not, so a failure
-            // here means nothing changed.
-            self.settle(&record, Stage::Aborted, &error);
+            // Observed, not assumed. Every operation here mutates and then makes
+            // the mutation durable, so a failure can arrive after the change has
+            // already landed — a successful rename whose fsync then failed. The
+            // record used to say `Aborted` regardless, which released budget for
+            // work that ran, left it with no undo, and made drift report the
+            // engine's own change as somebody else's.
+            let stage = self.stage_after_failure(plan);
+            self.settle(&record, stage, &error);
             return Err(error);
         }
         fault::check(FaultPoint::AfterRenameBeforeCommit);
@@ -275,9 +280,36 @@ impl Executor<'_> {
     /// A failure to write this is swallowed: the original error is what the
     /// caller needs, and replacing it with a journal error would hide why the
     /// operation stopped in the first place. Recovery finds the record either way.
+    /// What the journal should say when the filesystem work returned an error.
+    ///
+    /// The same question recovery asks after a crash, so it is answered the same
+    /// way — one classification rule rather than two that can disagree. An
+    /// observation that cannot be made at all is the case where assuming is
+    /// worst, so it is left for a person.
+    fn stage_after_failure(&self, plan: &ChangePlan) -> Stage {
+        let Ok(observed) = self.observe(plan.transition.touched_paths()) else {
+            return Stage::RecoveryRequired;
+        };
+        stage_for(plan.transition.classify(&observed))
+    }
+
     fn settle(&mut self, record: &OperationRecord, stage: Stage, error: &Error) {
         let _ = self
             .journal
             .mark(record.id, stage, None, Some(error.code().as_str()));
+    }
+}
+
+/// What an observation of the workspace means for an operation's stage.
+///
+/// Shared by the executor, when its filesystem work failed, and by recovery,
+/// when a crash left the question open. They are the same question: the engine
+/// said it was applying something, and this is what is actually there.
+pub const fn stage_for(observation: Observation) -> Stage {
+    match observation {
+        Observation::MatchesBefore => Stage::Aborted,
+        Observation::MatchesAfter => Stage::Committed,
+        Observation::Partial => Stage::RecoveryRequired,
+        Observation::Divergent => Stage::Conflict,
     }
 }

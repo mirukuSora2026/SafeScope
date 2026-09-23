@@ -215,3 +215,59 @@ fn applying_leaves_no_temporary_behind() {
         .collect();
     assert!(leftovers.is_empty(), "left behind: {leftovers:?}");
 }
+
+/// What the journal is told when the filesystem work returned an error.
+///
+/// Every operation here mutates and then makes the mutation durable, so a
+/// failure can arrive after the change has already landed — a rename that
+/// succeeded whose fsync then failed. The executor recorded `Aborted` for all of
+/// them, which released budget for work that ran, left it with no undo, and made
+/// drift report the engine's own change as somebody else's.
+mod after_a_failed_operation {
+    use safescope::domain::Observation;
+    use safescope::executor::stage_for;
+    use safescope::journal::Stage;
+
+    #[test]
+    fn nothing_changed_is_aborted() {
+        assert_eq!(stage_for(Observation::MatchesBefore), Stage::Aborted);
+    }
+
+    #[test]
+    fn the_change_landed_is_not_aborted() {
+        // The case the old code got wrong. Anything but `Aborted` will do here —
+        // what matters is that the record does not claim nothing happened.
+        let stage = stage_for(Observation::MatchesAfter);
+        assert_ne!(
+            stage,
+            Stage::Aborted,
+            "a change that ran was called a no-op"
+        );
+        assert_eq!(stage, Stage::Committed);
+    }
+
+    #[test]
+    fn a_half_finished_change_is_left_for_a_person() {
+        assert_eq!(stage_for(Observation::Partial), Stage::RecoveryRequired);
+        assert!(Stage::RecoveryRequired.needs_attention());
+    }
+
+    #[test]
+    fn a_workspace_matching_neither_side_is_a_conflict() {
+        assert_eq!(stage_for(Observation::Divergent), Stage::Conflict);
+        assert!(Stage::Conflict.needs_attention());
+    }
+
+    #[test]
+    fn only_aborted_gives_the_budget_back() {
+        // I5: released only if nothing ran. The three stages that mean it may
+        // have run must all keep holding it.
+        assert!(!Stage::Aborted.holds_budget());
+        for stage in [Stage::Committed, Stage::RecoveryRequired, Stage::Conflict] {
+            assert!(
+                stage.holds_budget(),
+                "{stage:?} released budget for work that may have run"
+            );
+        }
+    }
+}

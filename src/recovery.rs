@@ -17,7 +17,7 @@
 //! reported for a person to look at, because the situations it cannot decide are
 //! exactly the ones where being wrong destroys work.
 
-use crate::domain::{Observation, PathState};
+use crate::domain::PathState;
 use crate::error::Result;
 use crate::ids::OperationId;
 use crate::journal::{Journal, OperationRecord, Stage};
@@ -103,13 +103,11 @@ impl Recovery<'_> {
             // was somebody else.
             Stage::Prepared => Stage::Aborted,
 
+            // Through the same rule the executor uses when its own filesystem
+            // work failed. Two copies of this table would be two chances for it
+            // to be answered differently.
             Stage::Applying | Stage::RecoveryRequired => {
-                match record.transition.classify(&self.observe(record)?) {
-                    Observation::MatchesBefore => Stage::Aborted,
-                    Observation::MatchesAfter => Stage::Committed,
-                    Observation::Partial => Stage::RecoveryRequired,
-                    Observation::Divergent => Stage::Conflict,
-                }
+                crate::executor::stage_for(record.transition.classify(&self.observe(record)?))
             }
 
             settled => settled,
