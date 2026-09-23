@@ -283,3 +283,41 @@ fn an_approval_from_another_process_is_seen_at_once() {
         1
     );
 }
+
+#[test]
+fn reconnecting_does_not_hand_back_the_approvals_already_spent() {
+    // The limit is `max_elicitations_per_task`, and a task outlives any one
+    // connection. A count that lives in a session's memory is reset by opening
+    // another one — and under the guard the engine is rebuilt per connection, so
+    // a client only has to reconnect for the run of small approvals this exists
+    // to stop to carry on indefinitely.
+    let mut client = Client::connect();
+    client.will_answer(Answer::Accept);
+
+    for name in ["One", "Two", "Three"] {
+        client.call(
+            "request_scope_expansion",
+            json!({
+                "paths": [format!("docs/{name}.md")],
+                "operations": ["create"],
+                "reason": "another one",
+            }),
+        );
+    }
+
+    client.restart_server();
+    client.will_answer(Answer::Accept);
+
+    let error = client.call_expecting_refusal(
+        "request_scope_expansion",
+        json!({
+            "paths": ["docs/Four.md"],
+            "operations": ["create"],
+            "reason": "one more, on a fresh connection",
+        }),
+    );
+    assert_eq!(
+        error["data"]["code"], "APPROVAL_NEEDS_TTY",
+        "reconnecting reset the count: {error}"
+    );
+}

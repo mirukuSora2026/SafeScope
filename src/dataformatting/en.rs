@@ -1,6 +1,8 @@
 //! English messages.
 
-use crate::dataformatting::{Label, Msg};
+use crate::dataformatting::Msg;
+
+mod labels;
 
 pub(super) fn render(msg: &Msg) -> String {
     match msg {
@@ -57,54 +59,7 @@ pub(super) fn render(msg: &Msg) -> String {
         Msg::PolicySchemaUnsupported { found, supported } => format!(
             "Unsupported policy schema_version {found}; this build understands {supported}."
         ),
-        Msg::Label(label) => match label {
-            Label::Allowed => "Allowed",
-            Label::Refused => "Refused",
-            Label::NotCovered => "Not covered",
-            Label::Path => "Path",
-            Label::Operation => "Operation",
-            Label::Policy => "Policy",
-            Label::PolicyVersion => "Version",
-            Label::EvaluationSteps => "Evaluation",
-            Label::StepProtected => "protected paths",
-            Label::StepDeny => "deny rules",
-            Label::StepAllow => "allow rules",
-            Label::StepGrant => "temporary approvals",
-            Label::NoMatch => "no match",
-            Label::Outcome => "Outcome",
-            Label::ExpansionPossible => "a scope expansion may be requested",
-            Label::ExpansionImpossible => "this cannot be opened by an approval",
-            Label::CurrentScope => "Allowed scope",
-            Label::Nothing => "nothing",
-            Label::Warnings => "Warnings",
-            Label::Approved => "Approved",
-            Label::UnapprovedEdits => "the policy file has unapproved edits",
-            Label::Task => "Task",
-            Label::Usage => "Usage",
-            Label::State => "State",
-            Label::LastChange => "Last change",
-            Label::ChangedPaths => "changed paths",
-            Label::Operations => "operations",
-            Label::Moves => "moves",
-            Label::RecoveryStorage => "recovery storage",
-            Label::Unfinished => "unfinished",
-            Label::NeedsComparing => "needs comparing",
-            Label::TemporaryApprovals => "temporary approvals",
-            Label::PolicyFile => "policy file",
-            Label::History => "History",
-            Label::Coverage => "Coverage",
-            Label::NotStarted => "no task started",
-            Label::NoPolicyYet => "no policy approved",
-            Label::Checks => "Checks",
-            Label::Passed => "ok",
-            Label::Failed => "FAILED",
-            Label::ChangedOutside => "Changed outside SafeScope",
-            Label::NoBaseline => "no baseline",
-            Label::DriftAdded => "added",
-            Label::DriftModified => "changed",
-            Label::DriftRemoved => "removed",
-        }
-        .to_owned(),
+        Msg::Label(label) => labels::render(*label).to_owned(),
         Msg::WorkspaceAlreadyRegistered { root } => {
             format!("{root} is already a SafeScope workspace.")
         }
@@ -264,6 +219,20 @@ around it has nothing stored to put back."
             "Recovery data is kept for `retain_closed_task_days` after a task \
 finishes, and this may be older than that. The history of what happened is still \
 complete; only the contents needed to put it back are gone."
+                .to_owned()
+        }
+        Msg::JournalPragmaRefused {
+            pragma,
+            wanted,
+            found,
+        } => format!(
+            "The journal could not be set to `{pragma} = {wanted}`; it is `{found}`. \
+             Every claim about surviving a crash rests on that setting, so the journal \
+             will not open rather than promise what it cannot keep."
+        ),
+        Msg::HintJournalNeedsARealFilesystem => {
+            "This usually means the state directory is on a filesystem that cannot do it — \
+a network share, or some container mounts. Point SAFESCOPE_DATA_DIR at local storage."
                 .to_owned()
         }
         Msg::RecoveryFoundNothing => "Nothing needed recovering.".to_owned(),

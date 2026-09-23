@@ -57,11 +57,11 @@ pub struct WriteSession {
     task: TaskId,
     grants: GrantStore,
     client: Option<ConnectedClient>,
-    /// Approvals obtained through the client so far.
+    /// Approvals obtained through the client during *this* session.
     ///
-    /// Counted so a long run of small requests cannot quietly add up to a
-    /// wide one: past a limit, further approvals have to be given at a
-    /// terminal.
+    /// The limit is per task and a task outlives any one session, so this is a
+    /// cache in front of the grant store rather than the count itself — see
+    /// [`WriteSession::elicitations`].
     elicitations: u32,
 }
 
@@ -182,8 +182,27 @@ impl WriteSession {
     }
 
     /// How many approvals this task has collected through the client.
-    pub const fn elicitations(&self) -> u32 {
-        self.elicitations
+    /// How many approvals this task has collected through a client.
+    ///
+    /// Counted from the grant store, not from this session's memory. The limit
+    /// is `max_elicitations_per_task` and a task outlives a session: a count
+    /// held only in memory started again at zero whenever one was opened, so a
+    /// client had only to reconnect for the run of small approvals this exists
+    /// to stop to carry on indefinitely — and under a guard the engine is
+    /// rebuilt per connection, which does it without being asked.
+    ///
+    /// Expired and consumed grants still count. They were still a question put
+    /// to a person, and forgetting them is the same hole by another route.
+    pub fn elicitations(&self) -> u32 {
+        let counted = self.grants.all().map_or(0, |grants| {
+            grants
+                .iter()
+                .filter(|grant| grant.task == self.task && !grant.issued_by.is_terminal())
+                .count() as u32
+        });
+        // Whichever is higher. A grant that could not be written down is still
+        // an approval that was asked for.
+        counted.max(self.elicitations)
     }
 
     /// Records that one more was collected.

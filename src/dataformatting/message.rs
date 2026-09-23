@@ -238,6 +238,12 @@ pub enum Msg {
         field: String,
     },
     HintSnapshotMayHaveAged,
+    JournalPragmaRefused {
+        pragma: String,
+        wanted: String,
+        found: String,
+    },
+    HintJournalNeedsARealFilesystem,
 
     // ── Enforcement validation ─────────────────────────────────────────
     PolicyAllowToolsWithoutAllowlist,

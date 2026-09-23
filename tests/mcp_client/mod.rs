@@ -110,6 +110,34 @@ impl Client {
         }
     }
 
+    /// Kills the server and starts another one on the same workspace.
+    ///
+    /// What a client reconnecting looks like to the engine — and what the guard
+    /// does of its own accord, since it builds an engine per connection. Any
+    /// limit that lives only in a session's memory is reset by this.
+    pub fn restart_server(&mut self) {
+        let _ = self.child.kill();
+        let _ = self.child.wait();
+
+        let mut child = Command::new(BINARY)
+            .env(DATA_DIR_ENV, self._data.path())
+            .env("SAFESCOPE_LANG", "en")
+            .arg("--workspace")
+            .arg(self.root.path())
+            .arg("mcp")
+            .stdin(Stdio::piped())
+            .stdout(Stdio::piped())
+            .stderr(Stdio::null())
+            .spawn()
+            .expect("spawn server");
+
+        self.stdin = child.stdin.take().expect("stdin");
+        self.stdout = BufReader::new(child.stdout.take().expect("stdout"));
+        self.child = child;
+        self.next_id = 0;
+        self.handshake(true);
+    }
+
     /// Connects as a client that cannot put a question to a person.
     pub fn connect_without_elicitation() -> Self {
         let mut client = Self::spawn();

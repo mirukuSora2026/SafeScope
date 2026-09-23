@@ -1,6 +1,8 @@
 //! Japanese messages.
 
-use crate::dataformatting::{Label, Msg};
+use crate::dataformatting::Msg;
+
+mod labels;
 
 pub(super) fn render(msg: &Msg) -> String {
     match msg {
@@ -61,54 +63,7 @@ pub(super) fn render(msg: &Msg) -> String {
             "サポートされていないポリシーの schema_version {found} です。\
              このビルドが理解するのは {supported} です。"
         ),
-        Msg::Label(label) => match label {
-            Label::Allowed => "許可",
-            Label::Refused => "拒否",
-            Label::NotCovered => "該当なし",
-            Label::Path => "パス",
-            Label::Operation => "操作",
-            Label::Policy => "ポリシー",
-            Label::PolicyVersion => "バージョン",
-            Label::EvaluationSteps => "評価",
-            Label::StepProtected => "保護パス",
-            Label::StepDeny => "deny ルール",
-            Label::StepAllow => "allow ルール",
-            Label::StepGrant => "一時承認",
-            Label::NoMatch => "一致なし",
-            Label::Outcome => "結果",
-            Label::ExpansionPossible => "範囲の拡張を要求できます",
-            Label::ExpansionImpossible => "承認では解除できません",
-            Label::CurrentScope => "許可範囲",
-            Label::Nothing => "なし",
-            Label::Warnings => "警告",
-            Label::Approved => "承認済み",
-            Label::UnapprovedEdits => "ポリシーファイルに未承認の変更があります",
-            Label::Task => "タスク",
-            Label::Usage => "使用量",
-            Label::State => "状態",
-            Label::LastChange => "最後の変更",
-            Label::ChangedPaths => "変更パス",
-            Label::Operations => "ファイル操作",
-            Label::Moves => "移動",
-            Label::RecoveryStorage => "復旧ストレージ",
-            Label::Unfinished => "未完了",
-            Label::NeedsComparing => "照合が必要",
-            Label::TemporaryApprovals => "一時承認",
-            Label::PolicyFile => "ポリシーファイル",
-            Label::History => "履歴",
-            Label::Coverage => "適用範囲",
-            Label::NotStarted => "タスク未開始",
-            Label::NoPolicyYet => "ポリシー未承認",
-            Label::Checks => "点検",
-            Label::Passed => "正常",
-            Label::Failed => "失敗",
-            Label::ChangedOutside => "SafeScope の外で変更されたもの",
-            Label::NoBaseline => "基準なし",
-            Label::DriftAdded => "追加",
-            Label::DriftModified => "変更",
-            Label::DriftRemoved => "削除",
-        }
-        .to_owned(),
+        Msg::Label(label) => labels::render(*label).to_owned(),
         Msg::WorkspaceAlreadyRegistered { root } => {
             format!("{root} はすでに SafeScope のワークスペースです。")
         }
@@ -257,6 +212,14 @@ SafeScope が把握しているのはこれらのツールを通した変更だ�
         ),
         Msg::HintSnapshotMayHaveAged => "復旧データはタスク終了後 `retain_closed_task_days` の間保持され、これはそれより\
 古い可能性があります。何が起きたかの履歴はそのまま残っており、失われたのは元に戻すための内容だけです。"
+            .to_owned(),
+        Msg::JournalPragmaRefused { pragma, wanted, found } => format!(
+            "ジャーナルを `{pragma} = {wanted}` に設定できませんでした。現在は `{found}` です。\
+             クラッシュ後も残るという主張はすべてこの設定に依存するため、守れない約束をするくらいなら\
+             ジャーナルを開きません。"
+        ),
+        Msg::HintJournalNeedsARealFilesystem => "多くの場合、状態ディレクトリがその設定に対応していないファイルシステム上にあります — \
+ネットワーク共有や一部のコンテナマウントです。SAFESCOPE_DATA_DIR をローカルストレージに向けてください。"
             .to_owned(),
         Msg::RecoveryFoundNothing => "復旧が必要なものはありませんでした。".to_owned(),
         Msg::RecoverySettled { aborted, committed } => {

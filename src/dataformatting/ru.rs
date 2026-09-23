@@ -1,6 +1,8 @@
 //! Russian messages.
 
-use crate::dataformatting::{Label, Msg};
+use crate::dataformatting::Msg;
+
+mod labels;
 
 pub(super) fn render(msg: &Msg) -> String {
     match msg {
@@ -57,54 +59,7 @@ pub(super) fn render(msg: &Msg) -> String {
         Msg::PolicySchemaUnsupported { found, supported } => format!(
             "Неподдерживаемая версия схемы политики {found}; эта сборка понимает {supported}."
         ),
-        Msg::Label(label) => match label {
-            Label::Allowed => "Разрешено",
-            Label::Refused => "Отклонено",
-            Label::NotCovered => "Не покрыто",
-            Label::Path => "Путь",
-            Label::Operation => "Операция",
-            Label::Policy => "Политика",
-            Label::PolicyVersion => "Версия",
-            Label::EvaluationSteps => "Разбор",
-            Label::StepProtected => "защищённые пути",
-            Label::StepDeny => "правила deny",
-            Label::StepAllow => "правила allow",
-            Label::StepGrant => "временные одобрения",
-            Label::NoMatch => "нет совпадений",
-            Label::Outcome => "Итог",
-            Label::ExpansionPossible => "можно запросить расширение области",
-            Label::ExpansionImpossible => "это нельзя открыть одобрением",
-            Label::CurrentScope => "Разрешённая область",
-            Label::Nothing => "нет",
-            Label::Warnings => "Предупреждения",
-            Label::Approved => "Утверждено",
-            Label::UnapprovedEdits => "в файле политики есть неутверждённые правки",
-            Label::Task => "Задача",
-            Label::Usage => "Расход",
-            Label::State => "Состояние",
-            Label::LastChange => "Последнее изменение",
-            Label::ChangedPaths => "изменённые пути",
-            Label::Operations => "операции",
-            Label::Moves => "перемещения",
-            Label::RecoveryStorage => "хранилище восстановления",
-            Label::Unfinished => "незавершённые",
-            Label::NeedsComparing => "требуют сверки",
-            Label::TemporaryApprovals => "временные одобрения",
-            Label::PolicyFile => "файл политики",
-            Label::History => "История",
-            Label::Coverage => "Покрытие",
-            Label::NotStarted => "задача не начата",
-            Label::NoPolicyYet => "политика не утверждена",
-            Label::Checks => "Проверки",
-            Label::Passed => "ок",
-            Label::Failed => "СБОЙ",
-            Label::ChangedOutside => "Изменено в обход SafeScope",
-            Label::NoBaseline => "нет базового состояния",
-            Label::DriftAdded => "добавлено",
-            Label::DriftModified => "изменено",
-            Label::DriftRemoved => "удалено",
-        }
-        .to_owned(),
+        Msg::Label(label) => labels::render(*label).to_owned(),
         Msg::WorkspaceAlreadyRegistered { root } => {
             format!("{root} уже является рабочим пространством SafeScope.")
         }
@@ -259,6 +214,14 @@ SafeScope знает только об изменениях, сделанных 
         Msg::HintSnapshotMayHaveAged => "Данные для восстановления хранятся `retain_closed_task_days` после завершения \
 задачи, и это может быть старше. История того, что произошло, сохранена полностью; нет только \
 содержимого, нужного чтобы вернуть всё назад."
+            .to_owned(),
+        Msg::JournalPragmaRefused { pragma, wanted, found } => format!(
+            "Журнал не удалось перевести в `{pragma} = {wanted}`; сейчас это `{found}`. \
+             На этой настройке держатся все обещания пережить сбой, поэтому журнал не откроется, \
+             а не станет обещать то, чего не может."
+        ),
+        Msg::HintJournalNeedsARealFilesystem => "Обычно это значит, что каталог состояния лежит на файловой системе, которая так не умеет — \
+сетевой ресурс или некоторые монтирования контейнеров. Укажите SAFESCOPE_DATA_DIR на локальное хранилище."
             .to_owned(),
         Msg::RecoveryFoundNothing => "Восстанавливать было нечего.".to_owned(),
         Msg::RecoverySettled { aborted, committed } => {

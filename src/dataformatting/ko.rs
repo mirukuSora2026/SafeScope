@@ -1,6 +1,8 @@
 //! Korean messages.
 
-use crate::dataformatting::{Label, Msg};
+use crate::dataformatting::Msg;
+
+mod labels;
 
 pub(super) fn render(msg: &Msg) -> String {
     match msg {
@@ -57,54 +59,7 @@ pub(super) fn render(msg: &Msg) -> String {
             "지원하지 않는 정책 schema_version {found} 입니다. 이 빌드는 {supported} 을 \
              이해합니다."
         ),
-        Msg::Label(label) => match label {
-            Label::Allowed => "허용",
-            Label::Refused => "거부",
-            Label::NotCovered => "해당 없음",
-            Label::Path => "경로",
-            Label::Operation => "연산",
-            Label::Policy => "정책",
-            Label::PolicyVersion => "버전",
-            Label::EvaluationSteps => "평가 과정",
-            Label::StepProtected => "보호 경로",
-            Label::StepDeny => "deny 규칙",
-            Label::StepAllow => "allow 규칙",
-            Label::StepGrant => "임시 승인",
-            Label::NoMatch => "해당 없음",
-            Label::Outcome => "결과",
-            Label::ExpansionPossible => "범위 확장을 요청할 수 있습니다",
-            Label::ExpansionImpossible => "승인으로 열 수 없습니다",
-            Label::CurrentScope => "허용 범위",
-            Label::Nothing => "없음",
-            Label::Warnings => "경고",
-            Label::Approved => "승인됨",
-            Label::UnapprovedEdits => "정책 파일에 승인되지 않은 변경이 있습니다",
-            Label::Task => "작업",
-            Label::Usage => "사용량",
-            Label::State => "상태",
-            Label::LastChange => "마지막 변경",
-            Label::ChangedPaths => "변경 경로",
-            Label::Operations => "파일 작업",
-            Label::Moves => "이동",
-            Label::RecoveryStorage => "복구 저장소",
-            Label::Unfinished => "미완료",
-            Label::NeedsComparing => "대조 필요",
-            Label::TemporaryApprovals => "임시 승인",
-            Label::PolicyFile => "정책 파일",
-            Label::History => "기록",
-            Label::Coverage => "적용 범위",
-            Label::NotStarted => "시작된 작업 없음",
-            Label::NoPolicyYet => "승인된 정책 없음",
-            Label::Checks => "점검",
-            Label::Passed => "정상",
-            Label::Failed => "실패",
-            Label::ChangedOutside => "SafeScope 밖에서 바뀐 것",
-            Label::NoBaseline => "기준 상태 없음",
-            Label::DriftAdded => "추가됨",
-            Label::DriftModified => "변경됨",
-            Label::DriftRemoved => "삭제됨",
-        }
-        .to_owned(),
+        Msg::Label(label) => labels::render(*label).to_owned(),
         Msg::WorkspaceAlreadyRegistered { root } => {
             format!("{root} 은 이미 SafeScope 작업 공간입니다.")
         }
@@ -257,6 +212,14 @@ SafeScope를 거친 변경에 대해서만 가능합니다. 엔진 밖에서 만
         Msg::HintSnapshotMayHaveAged => "복구 데이터는 태스크가 끝난 뒤 `retain_closed_task_days` 동안 보관되며, \
 이건 그보다 오래됐을 수 있습니다. 무슨 일이 있었는지의 기록은 그대로 남아 있고, 되돌리는 데 필요한 \
 내용만 없습니다."
+            .to_owned(),
+        Msg::JournalPragmaRefused { pragma, wanted, found } => format!(
+            "저널을 `{pragma} = {wanted}`로 설정할 수 없습니다. 현재 값은 `{found}`입니다. \
+             크래시에서 살아남는다는 모든 주장이 이 설정에 걸려 있으므로, 지킬 수 없는 약속을 \
+             하느니 저널을 열지 않습니다."
+        ),
+        Msg::HintJournalNeedsARealFilesystem => "보통 상태 디렉터리가 그 설정을 지원하지 않는 파일시스템에 있을 때입니다 — \
+네트워크 공유나 일부 컨테이너 마운트. SAFESCOPE_DATA_DIR를 로컬 저장소로 지정하세요."
             .to_owned(),
         Msg::RecoveryFoundNothing => "복구할 것이 없었습니다.".to_owned(),
         Msg::RecoverySettled { aborted, committed } => {

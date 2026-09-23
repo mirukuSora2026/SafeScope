@@ -1,6 +1,8 @@
 //! Simplified Chinese messages.
 
-use crate::dataformatting::{Label, Msg};
+use crate::dataformatting::Msg;
+
+mod labels;
 
 pub(super) fn render(msg: &Msg) -> String {
     match msg {
@@ -51,54 +53,7 @@ pub(super) fn render(msg: &Msg) -> String {
         Msg::PolicySchemaUnsupported { found, supported } => {
             format!("不支持的策略 schema_version {found}；此版本支持 {supported}。")
         }
-        Msg::Label(label) => match label {
-            Label::Allowed => "允许",
-            Label::Refused => "拒绝",
-            Label::NotCovered => "未覆盖",
-            Label::Path => "路径",
-            Label::Operation => "操作",
-            Label::Policy => "策略",
-            Label::PolicyVersion => "版本",
-            Label::EvaluationSteps => "评估过程",
-            Label::StepProtected => "受保护路径",
-            Label::StepDeny => "deny 规则",
-            Label::StepAllow => "allow 规则",
-            Label::StepGrant => "临时批准",
-            Label::NoMatch => "无匹配",
-            Label::Outcome => "结果",
-            Label::ExpansionPossible => "可以申请扩大范围",
-            Label::ExpansionImpossible => "无法通过批准解除",
-            Label::CurrentScope => "允许范围",
-            Label::Nothing => "无",
-            Label::Warnings => "警告",
-            Label::Approved => "已批准",
-            Label::UnapprovedEdits => "策略文件有未批准的修改",
-            Label::Task => "任务",
-            Label::Usage => "用量",
-            Label::State => "状态",
-            Label::LastChange => "最近更改",
-            Label::ChangedPaths => "变更路径",
-            Label::Operations => "文件操作",
-            Label::Moves => "移动",
-            Label::RecoveryStorage => "恢复存储",
-            Label::Unfinished => "未完成",
-            Label::NeedsComparing => "需要比对",
-            Label::TemporaryApprovals => "临时批准",
-            Label::PolicyFile => "策略文件",
-            Label::History => "历史",
-            Label::Coverage => "覆盖范围",
-            Label::NotStarted => "尚未开始任务",
-            Label::NoPolicyYet => "尚未批准策略",
-            Label::Checks => "检查",
-            Label::Passed => "正常",
-            Label::Failed => "失败",
-            Label::ChangedOutside => "在 SafeScope 之外被更改",
-            Label::NoBaseline => "无基准",
-            Label::DriftAdded => "新增",
-            Label::DriftModified => "更改",
-            Label::DriftRemoved => "删除",
-        }
-        .to_owned(),
+        Msg::Label(label) => labels::render(*label).to_owned(),
         Msg::WorkspaceAlreadyRegistered { root } => {
             format!("{root} 已经是 SafeScope 工作区。")
         }
@@ -239,6 +194,13 @@ SafeScope 只了解经由这些工具所做的更改。由 shell 命令写入的
         ),
         Msg::HintSnapshotMayHaveAged => "恢复数据在任务结束后保留 `retain_closed_task_days` 天，此项可能已超过该期限。\
 关于发生了什么的历史记录仍然完整，缺少的只是用于还原的内容。"
+            .to_owned(),
+        Msg::JournalPragmaRefused { pragma, wanted, found } => format!(
+            "无法将日志设置为 `{pragma} = {wanted}`，当前为 `{found}`。\
+             所有关于崩溃后存活的保证都依赖该设置，因此宁可不打开日志，也不做无法兑现的承诺。"
+        ),
+        Msg::HintJournalNeedsARealFilesystem => "通常是因为状态目录位于不支持该设置的文件系统上——网络共享，或某些容器挂载。\
+请将 SAFESCOPE_DATA_DIR 指向本地存储。"
             .to_owned(),
         Msg::RecoveryFoundNothing => "没有需要恢复的内容。".to_owned(),
         Msg::RecoverySettled { aborted, committed } => {

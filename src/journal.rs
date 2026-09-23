@@ -95,6 +95,14 @@ impl Journal {
             .and_then(|()| connection.pragma_update(None, "foreign_keys", "ON"))
             .map_err(failed)?;
 
+        // Read back, because a pragma that did not take is silent. Every
+        // durability claim in this crate rests on `synchronous = FULL`; a
+        // filesystem or a build where it quietly stayed at NORMAL would leave
+        // the journal promising something it no longer does, and nothing would
+        // say so until a crash had already lost the record.
+        confirm(&connection, "synchronous", "2")?;
+        confirm(&connection, "journal_mode", "wal")?;
+
         connection.execute_batch(SCHEMA).map_err(failed)?;
         connection
             .execute(
@@ -439,6 +447,37 @@ fn millis(time: SystemTime) -> i64 {
 
 fn from_millis(value: i64) -> SystemTime {
     UNIX_EPOCH + Duration::from_millis(value.max(0) as u64)
+}
+
+/// Fails unless a pragma reads back as the value that was asked for.
+fn confirm(connection: &Connection, pragma: &str, expected: &str) -> Result<()> {
+    let found: String = connection
+        .query_row(&format!("PRAGMA {pragma}"), [], |row| {
+            // Both of these come back as either text or an integer depending on
+            // the pragma, so whichever it is becomes a string to compare.
+            row.get::<_, rusqlite::types::Value>(0)
+                .map(|value| match value {
+                    rusqlite::types::Value::Text(text) => text,
+                    rusqlite::types::Value::Integer(number) => number.to_string(),
+                    other => format!("{other:?}"),
+                })
+        })
+        .map_err(failed)?;
+
+    if found.eq_ignore_ascii_case(expected) {
+        return Ok(());
+    }
+    Err(Error::Faulted(
+        Fault::new(
+            ErrorCode::JournalFailed,
+            Msg::JournalPragmaRefused {
+                pragma: pragma.to_owned(),
+                wanted: expected.to_owned(),
+                found,
+            },
+        )
+        .with_hint(Msg::HintJournalNeedsARealFilesystem),
+    ))
 }
 
 fn failed(error: impl std::fmt::Display) -> Error {

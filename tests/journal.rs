@@ -364,3 +364,27 @@ fn an_observed_absence_round_trips() {
         FileState::Absent
     );
 }
+
+#[test]
+fn the_journal_opens_only_with_the_durability_it_promises() {
+    // I1 says the intent record is durable before any file changes, and the
+    // whole of that rests on `synchronous = FULL`. A pragma that does not take
+    // is silent, so this reads them back: if the setting ever stops applying —
+    // a filesystem that cannot do it, a build that changed underneath — the
+    // journal refuses to open rather than promising what it cannot keep.
+    let directory = TempDir::new().expect("temp dir");
+    let journal = Journal::open_at(&directory.path().join("state.sqlite")).expect("open");
+    drop(journal);
+
+    let connection =
+        rusqlite::Connection::open(directory.path().join("state.sqlite")).expect("reopen");
+    let synchronous: i64 = connection
+        .query_row("PRAGMA synchronous", [], |row| row.get(0))
+        .expect("synchronous");
+    let mode: String = connection
+        .query_row("PRAGMA journal_mode", [], |row| row.get(0))
+        .expect("journal_mode");
+
+    assert_eq!(synchronous, 2, "not FULL, so nothing here survives a crash");
+    assert!(mode.eq_ignore_ascii_case("wal"), "{mode}");
+}
