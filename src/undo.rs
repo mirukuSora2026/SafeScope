@@ -179,8 +179,8 @@ impl Undo<'_> {
 }
 
 fn nothing_to_undo() -> Error {
-    Error::Denied(Denial::new(
-        ErrorCode::PlanNotFound,
-        Msg::UndoNothingRecorded,
-    ))
+    Error::Denied(
+        Denial::new(ErrorCode::PlanNotFound, Msg::UndoNothingRecorded)
+            .with_hint(Msg::HintNothingToUndo),
+    )
 }

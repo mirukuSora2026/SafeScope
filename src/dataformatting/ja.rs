@@ -248,6 +248,16 @@ SafeScope が把握しているのはこれらのツールを通した変更だ�
             "`allow_tools` に `{tool}` が含まれています。シェルコマンドを実行できるツールのため、\
              許可するとこのモードが閉じようとしていた経路が再び開きます。その経路での変更は記録されません。"
         ),
+        Msg::HintNothingToUndo => "このタスクには元に戻せる記録がありません。取り消しは一度に一操作ずつ、SafeScope を\
+経由した変更に対してのみ行えます。エンジンの外で行われた変更は、戻すための内容が保存されていません。"
+            .to_owned(),
+        Msg::HintWhatTheOperationNeeds { operation, field } => format!(
+            "`{operation}` には `{field}` が必要です。その名前のとおり正確に送ってください — \
+             似た名前は別の綴りではなく、欠けたフィールドとして扱われます。"
+        ),
+        Msg::HintSnapshotMayHaveAged => "復旧データはタスク終了後 `retain_closed_task_days` の間保持され、これはそれより\
+古い可能性があります。何が起きたかの履歴はそのまま残っており、失われたのは元に戻すための内容だけです。"
+            .to_owned(),
         Msg::RecoveryFoundNothing => "復旧が必要なものはありませんでした。".to_owned(),
         Msg::RecoverySettled { aborted, committed } => {
             format!("実行された操作 {committed} 件と、されなかった {aborted} 件を確定しました。")

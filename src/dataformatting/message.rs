@@ -232,6 +232,13 @@ pub enum Msg {
     /// Said where the platform cannot flush a directory.
     DurabilityLimitedHere,
 
+    HintNothingToUndo,
+    HintWhatTheOperationNeeds {
+        operation: String,
+        field: String,
+    },
+    HintSnapshotMayHaveAged,
+
     // ── Enforcement validation ─────────────────────────────────────────
     PolicyAllowToolsWithoutAllowlist,
     PolicyAllowToolsReopensTheGap {

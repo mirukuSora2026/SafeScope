@@ -247,6 +247,17 @@ SafeScope 는 이 도구들을 거친 변경만 압니다. 셸 명령이 쓴 것
             "`allow_tools`에 `{tool}`이(가) 있습니다. 셸 명령을 실행할 수 있는 도구라, \
              허용하면 이 모드가 막으려던 경로가 다시 열립니다. 그렇게 만든 변경은 기록되지 않습니다."
         ),
+        Msg::HintNothingToUndo => "이 태스크에는 되돌릴 수 있는 기록이 없습니다. 되돌리기는 한 번에 한 작업씩, \
+SafeScope를 거친 변경에 대해서만 가능합니다. 엔진 밖에서 만든 변경은 되돌릴 내용이 저장돼 있지 않습니다."
+            .to_owned(),
+        Msg::HintWhatTheOperationNeeds { operation, field } => format!(
+            "`{operation}`에는 `{field}`가 필요합니다. 이름을 정확히 그대로 보내세요 — \
+             비슷한 이름은 다른 철자가 아니라 누락된 필드입니다."
+        ),
+        Msg::HintSnapshotMayHaveAged => "복구 데이터는 태스크가 끝난 뒤 `retain_closed_task_days` 동안 보관되며, \
+이건 그보다 오래됐을 수 있습니다. 무슨 일이 있었는지의 기록은 그대로 남아 있고, 되돌리는 데 필요한 \
+내용만 없습니다."
+            .to_owned(),
         Msg::RecoveryFoundNothing => "복구할 것이 없었습니다.".to_owned(),
         Msg::RecoverySettled { aborted, committed } => {
             format!("실행된 연산 {committed}건과 실행되지 않은 {aborted}건을 확정했습니다.")

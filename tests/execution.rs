@@ -259,6 +259,27 @@ mod after_a_failed_operation {
     }
 
     #[test]
+    fn the_stages_that_mean_it_ran_carry_an_observation() {
+        // Drift decides what the engine did from the observations on committed
+        // records. A record settled without one says the workspace moved and
+        // offers no evidence of it, so drift reports the engine's own change as
+        // somebody else's — and recovery, asking the same question after a
+        // crash, records it. The two must not disagree.
+        for stage in [Stage::Committed, Stage::Conflict] {
+            assert!(
+                safescope::executor::settles_with_an_observation(stage),
+                "{stage:?} would be recorded with nothing to show for it"
+            );
+        }
+        for stage in [Stage::Aborted, Stage::RecoveryRequired, Stage::Rejected] {
+            assert!(
+                !safescope::executor::settles_with_an_observation(stage),
+                "{stage:?} claimed an observation it has no business making"
+            );
+        }
+    }
+
+    #[test]
     fn only_aborted_gives_the_budget_back() {
         // I5: released only if nothing ran. The three stages that mean it may
         // have run must all keep holding it.

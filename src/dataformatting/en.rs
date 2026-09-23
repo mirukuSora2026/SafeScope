@@ -250,6 +250,22 @@ name — so the list has no effect. Set `mode = \"allowlist\"` if it was meant t
              reopens the route the allowlist exists to close; changes made that way are \
              not recorded."
         ),
+        Msg::HintNothingToUndo => {
+            "This task has reversed or recorded nothing that can be undone. Undo goes back \
+one operation at a time and only over changes made through SafeScope; a change made \
+around it has nothing stored to put back."
+                .to_owned()
+        }
+        Msg::HintWhatTheOperationNeeds { operation, field } => format!(
+            "A `{operation}` needs `{field}`. Send it with that name exactly — a near \
+             miss is a missing field, not a different spelling of one."
+        ),
+        Msg::HintSnapshotMayHaveAged => {
+            "Recovery data is kept for `retain_closed_task_days` after a task \
+finishes, and this may be older than that. The history of what happened is still \
+complete; only the contents needed to put it back are gone."
+                .to_owned()
+        }
         Msg::RecoveryFoundNothing => "Nothing needed recovering.".to_owned(),
         Msg::RecoverySettled { aborted, committed } => {
             format!("Settled {committed} operation(s) that had run and {aborted} that had not.")

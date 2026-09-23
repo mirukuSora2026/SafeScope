@@ -136,10 +136,10 @@ impl Recovery<'_> {
 
     /// The observation worth recording, which is only the one that settles it.
     fn observed_for(&self, record: &OperationRecord, now: Stage) -> Result<Option<Vec<PathState>>> {
-        match now {
-            Stage::Committed | Stage::Conflict => self.observe(record).map(Some),
-            _ => Ok(None),
+        if crate::executor::settles_with_an_observation(now) {
+            return self.observe(record).map(Some);
         }
+        Ok(None)
     }
 
     /// Removes temporaries a crash left beside this operation's targets.

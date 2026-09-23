@@ -387,3 +387,34 @@ fn history_comes_back_under_a_named_field() {
         "history should be an object with an operations list: {history}"
     );
 }
+
+#[test]
+fn a_missing_field_says_which_name_the_operation_wanted() {
+    // Measured, not imagined: a real session sent `content` for `contents`,
+    // was told a field was missing, and had nothing saying which name to use.
+    // It never reached a successful change.
+    let mut client = Client::connect();
+    let error = client.call_expecting_refusal(
+        "prepare_change",
+        json!({ "operation": "replace", "path": "src/A.java", "content": "x\n" }),
+    );
+
+    let text = error.to_string();
+    assert!(text.contains("contents"), "the field is not named: {text}");
+    assert!(
+        text.contains("replace"),
+        "the operation is not named, so the answer is still a guess: {text}"
+    );
+}
+
+#[test]
+fn undoing_nothing_says_why_retrying_will_not_help() {
+    // Without a hint a client reads "nothing recorded" and tries again.
+    let mut client = Client::connect();
+    let error = client.call_expecting_refusal("prepare_undo", json!({}));
+    let text = error.to_string();
+    assert!(
+        text.contains("one operation at a time") || text.contains("nothing stored"),
+        "no hint on an error that can never succeed by retrying: {text}"
+    );
+}

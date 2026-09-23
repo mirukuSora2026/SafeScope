@@ -230,6 +230,16 @@ SafeScope 只了解经由这些工具所做的更改。由 shell 命令写入的
             "`allow_tools` 中包含 `{tool}`，它可以执行 shell 命令。允许它会重新打开该模式\
              本要关闭的路径，通过那条路径所做的更改不会被记录。"
         ),
+        Msg::HintNothingToUndo => "此任务没有可撤销的记录。撤销一次只回退一个操作，且只针对经过 SafeScope 的更改；\
+在引擎之外所做的更改没有保存可供恢复的内容。"
+            .to_owned(),
+        Msg::HintWhatTheOperationNeeds { operation, field } => format!(
+            "`{operation}` 需要 `{field}`。请完全按该名称发送——相近的名称是缺失的字段，\
+             而不是同一字段的另一种拼写。"
+        ),
+        Msg::HintSnapshotMayHaveAged => "恢复数据在任务结束后保留 `retain_closed_task_days` 天，此项可能已超过该期限。\
+关于发生了什么的历史记录仍然完整，缺少的只是用于还原的内容。"
+            .to_owned(),
         Msg::RecoveryFoundNothing => "没有需要恢复的内容。".to_owned(),
         Msg::RecoverySettled { aborted, committed } => {
             format!("已确定 {committed} 个已执行的操作和 {aborted} 个未执行的操作。")

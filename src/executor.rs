@@ -141,7 +141,7 @@ impl Executor<'_> {
         // time; this confirms it is still there and still reads back correctly
         // before anything is put at risk.
         if let Err(error) = self.require_recoverable(plan) {
-            self.settle(&record, Stage::Rejected, &error);
+            self.settle(&record, Stage::Rejected, None, &error);
             return Err(error);
         }
 
@@ -155,8 +155,8 @@ impl Executor<'_> {
             // record used to say `Aborted` regardless, which released budget for
             // work that ran, left it with no undo, and made drift report the
             // engine's own change as somebody else's.
-            let stage = self.stage_after_failure(plan);
-            self.settle(&record, stage, &error);
+            let (stage, observed) = self.stage_after_failure(plan);
+            self.settle(&record, stage, observed.as_deref(), &error);
             return Err(error);
         }
         fault::check(FaultPoint::AfterRenameBeforeCommit);
@@ -286,18 +286,41 @@ impl Executor<'_> {
     /// way — one classification rule rather than two that can disagree. An
     /// observation that cannot be made at all is the case where assuming is
     /// worst, so it is left for a person.
-    fn stage_after_failure(&self, plan: &ChangePlan) -> Stage {
+    fn stage_after_failure(&self, plan: &ChangePlan) -> (Stage, Option<Vec<PathState>>) {
         let Ok(observed) = self.observe(plan.transition.touched_paths()) else {
-            return Stage::RecoveryRequired;
+            return (Stage::RecoveryRequired, None);
         };
-        stage_for(plan.transition.classify(&observed))
+        let stage = stage_for(plan.transition.classify(&observed));
+
+        // Recorded for the stages that mean the workspace moved, because that
+        // record is how everything else knows the engine did it. Without it
+        // drift reports the engine's own change as somebody else's, and the
+        // observation is already in hand.
+        let observed = settles_with_an_observation(stage).then_some(observed);
+        (stage, observed)
     }
 
-    fn settle(&mut self, record: &OperationRecord, stage: Stage, error: &Error) {
+    fn settle(
+        &mut self,
+        record: &OperationRecord,
+        stage: Stage,
+        observed: Option<&[PathState]>,
+        error: &Error,
+    ) {
         let _ = self
             .journal
-            .mark(record.id, stage, None, Some(error.code().as_str()));
+            .mark(record.id, stage, observed, Some(error.code().as_str()));
     }
+}
+
+/// Whether a stage is one the workspace's observed state should be recorded for.
+///
+/// The stages that mean the change may have landed. Drift decides what the
+/// engine did from the observations on committed records, so settling one
+/// without an observation makes the engine's own work look like somebody
+/// else's. Recovery answers this the same way; this is the one definition.
+pub const fn settles_with_an_observation(stage: Stage) -> bool {
+    matches!(stage, Stage::Committed | Stage::Conflict)
 }
 
 /// What an observation of the workspace means for an operation's stage.

@@ -96,10 +96,16 @@ impl ContentStore {
         let contents = match fs::read(&path) {
             Ok(contents) => contents,
             Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
-                return Err(Error::Faulted(Fault::new(
-                    ErrorCode::SnapshotFailed,
-                    Msg::SnapshotMissing { hash: hash.short() },
-                )));
+                // Absent, not corrupt. The likeliest reason is that retention
+                // reclaimed it, and saying so is the difference between "your
+                // store is damaged" and "this is older than you said to keep".
+                return Err(Error::Faulted(
+                    Fault::new(
+                        ErrorCode::SnapshotFailed,
+                        Msg::SnapshotMissing { hash: hash.short() },
+                    )
+                    .with_hint(Msg::HintSnapshotMayHaveAged),
+                ));
             }
             Err(error) => return Err(read_failed(&path, &error)),
         };

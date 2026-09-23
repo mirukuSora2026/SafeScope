@@ -310,7 +310,7 @@ pub fn to_change_request(request: &PrepareChange) -> Result<ChangeRequest> {
         },
         RequestedOperation::Trash => ChangeRequest::Trash { path },
         RequestedOperation::Move => {
-            let destination = request.to.as_deref().ok_or_else(|| missing("to"))?;
+            let destination = request.to.as_deref().ok_or_else(|| missing("move", "to"))?;
             ChangeRequest::Move {
                 from: path,
                 to: RelPath::parse(destination)?,
@@ -319,19 +319,36 @@ pub fn to_change_request(request: &PrepareChange) -> Result<ChangeRequest> {
     })
 }
 
+/// The contents a create or replace must carry.
 fn required_contents(request: &PrepareChange) -> Result<Vec<u8>> {
+    let operation = match request.operation {
+        RequestedOperation::Create => "create",
+        _ => "replace",
+    };
     request
         .contents
         .as_ref()
         .map(|text| text.as_bytes().to_vec())
-        .ok_or_else(|| missing("contents"))
+        .ok_or_else(|| missing(operation, "contents"))
 }
 
-fn missing(field: &str) -> Error {
-    Error::Denied(Denial::new(
-        ErrorCode::InvalidPath,
-        Msg::McpMissingField {
+/// A field the request needed and did not carry.
+///
+/// The hint names the operation as well as the field, because the failure this
+/// keeps producing is a near miss rather than an omission: a real session sent
+/// `content` for `contents`, read "missing field", and had nothing telling it
+/// which name the operation actually wanted.
+fn missing(operation: &str, field: &str) -> Error {
+    Error::Denied(
+        Denial::new(
+            ErrorCode::InvalidPath,
+            Msg::McpMissingField {
+                field: field.to_owned(),
+            },
+        )
+        .with_hint(Msg::HintWhatTheOperationNeeds {
+            operation: operation.to_owned(),
             field: field.to_owned(),
-        },
-    ))
+        }),
+    )
 }
