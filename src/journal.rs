@@ -279,6 +279,14 @@ impl Journal {
         )
     }
 
+    /// Every record, oldest first.
+    ///
+    /// What retention needs: deciding which snapshots are still owed to somebody
+    /// is a question about the whole workspace, not about one task.
+    pub fn all(&self) -> Result<Vec<OperationRecord>> {
+        self.query_many("ORDER BY sequence", params![])
+    }
+
     /// Every state this engine observed after a change it made, oldest first.
     ///
     /// What drift detection needs in order to tell its own work apart from

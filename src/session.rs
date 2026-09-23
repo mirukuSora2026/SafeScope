@@ -15,6 +15,7 @@
 //! writing the same files.
 
 use std::path::Path;
+use std::time::SystemTime;
 
 use crate::budget::{Budget, BudgetUsage};
 use crate::dataformatting::Msg;
@@ -30,6 +31,7 @@ use crate::policy::{
 };
 use crate::recovery::{Recovery, RecoveryReport};
 use crate::registry::{self, Registration};
+use crate::retention::{self, Reclaimed};
 use crate::store::baseline_store::BaselineStore;
 use crate::store::content::ContentStore;
 use crate::store::grant_store::GrantStore;
@@ -331,7 +333,27 @@ impl WriteSession {
     pub fn finish(&mut self) -> Result<()> {
         self.tasks.finish()?;
         self.task = self.tasks.current_or_start()?;
+
+        // Here rather than on a timer or a separate command: finishing is the
+        // one moment a task's recovery data stops being the current task's, and
+        // a workspace nobody prunes eventually refuses every change with its
+        // storage full. A failure to tidy is not a failure to finish.
+        let _ = self.prune();
         Ok(())
+    }
+
+    /// Removes recovery data no retained operation still needs.
+    ///
+    /// Returns what it freed, so a caller can say so rather than tidying up
+    /// behind a person's back.
+    pub fn prune(&self) -> Result<Reclaimed> {
+        retention::sweep(
+            &self.journal,
+            &self.snapshots,
+            self.policy.recovery(),
+            self.task,
+            SystemTime::now(),
+        )
     }
 
     fn context<'a>(&self, grants: &'a [Grant]) -> EvaluationContext<'a> {

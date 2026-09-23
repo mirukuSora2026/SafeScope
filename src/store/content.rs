@@ -34,6 +34,7 @@ use std::path::{Path, PathBuf};
 use crate::dataformatting::Msg;
 use crate::error::{Error, ErrorCode, Fault, Result};
 use crate::hash::ContentHash;
+use crate::retention::Reclaimed;
 
 use super::{StatePaths, read_failed, write_atomically};
 
@@ -158,6 +159,57 @@ impl ContentStore {
             }
         }
         Ok(total)
+    }
+
+    /// Removes every blob whose hash is not in `keep`.
+    ///
+    /// A sweep rather than a delete beside each record, because blobs are
+    /// content addressed and therefore shared: two operations that saw the same
+    /// contents point at one file, and removing it with the first would take it
+    /// from the second.
+    ///
+    /// A blob that cannot be measured or removed is left alone and not counted.
+    /// Recovery data is the thing being protected here, so a failure to tidy is
+    /// not a reason to lose any.
+    pub fn retain(&self, keep: &std::collections::HashSet<ContentHash>) -> Result<Reclaimed> {
+        let mut reclaimed = Reclaimed::default();
+        let shards = match fs::read_dir(&self.directory) {
+            Ok(shards) => shards,
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(reclaimed),
+            Err(error) => return Err(read_failed(&self.directory, &error)),
+        };
+
+        for shard in shards.flatten() {
+            let Ok(entries) = fs::read_dir(shard.path()) else {
+                continue;
+            };
+            for entry in entries.flatten() {
+                let name = entry.file_name();
+                let Some(text) = name.to_str() else {
+                    continue;
+                };
+                // The file name is the whole hash; the shard is only a directory
+                // to keep any one of them from growing too wide. A name this
+                // store did not write is not this store's to remove.
+                let Ok(hash) = ContentHash::from_hex(text) else {
+                    continue;
+                };
+                if keep.contains(&hash) {
+                    continue;
+                }
+                let Ok(metadata) = entry.metadata() else {
+                    continue;
+                };
+                if !metadata.is_file() {
+                    continue;
+                }
+                if fs::remove_file(entry.path()).is_ok() {
+                    reclaimed.blobs += 1;
+                    reclaimed.bytes += metadata.len();
+                }
+            }
+        }
+        Ok(reclaimed)
     }
 
     pub fn directory(&self) -> &Path {
