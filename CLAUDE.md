@@ -97,6 +97,14 @@ the tests.
 - The guard's sandbox profile names the resolved path as well as the given one.
   On macOS `/var` is a symlink to `/private/var`, so a profile naming only the
   first loads without error and protects nothing.
+- Landlock has no deny rule, so the guard says "everything but the workspace" by
+  granting read on `/` and write on the siblings of each step down to it. A path
+  that cannot be read while that list is built is skipped, which loses write
+  access rather than granting it: a rule that fails to be written fails closed.
+- The Landlock ruleset is built before the fork and applied in `pre_exec`.
+  Building it allocates and reads directories, neither of which is allowed after
+  a fork; applying it any earlier would take the workspace from the engine,
+  which is the one process that still has to be able to write there.
 - Refuse by allowlist, never by deny list. Measured: given a list of forbidden
   tools an agent moves to one that is not on it, and the set of tools that can
   run a shell command is not knowable in advance. A deny list is a promise that

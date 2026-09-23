@@ -15,8 +15,8 @@ The status output says so, and so should you.
 
 | | engine | `safescope guard` | evidence |
 |---|---|---|---|
-| macOS (Apple silicon) | every gate, 403 tests | yes | run here |
-| Linux (arm64) | every gate, 394 tests | no — refuses | run here |
+| macOS (Apple silicon) | every gate, 403 tests | yes — `sandbox-exec` | run here |
+| Linux (arm64) | every gate, 403 tests | yes — Landlock | run here |
 | Windows (x86-64) | **compiles; never run** | no — refuses | cross-build only |
 
 The first two rows were run, not inferred. Windows was not: the port compiles,
@@ -25,9 +25,10 @@ the `windows-latest` job in CI is green — the first time this was run on Linux
 it turned out every durability guarantee had been silently unenforced there, and
 that is what an unrun platform is worth.
 
-The tests Linux does not run are the guard's own, `cfg`-gated to the platform
-that has a sandbox. Windows additionally skips three symlink tests, because
-creating a symlink there needs a privilege a test cannot assume.
+Windows skips three symlink tests, because creating a symlink there needs a
+privilege a test cannot assume, and the guard's nine, because it has no sandbox
+to run under. A Linux older than Landlock (before 5.13) skips the guard's nine
+too and refuses to guard, rather than running a command unprotected.
 
 ### What Windows does differently
 
@@ -42,9 +43,10 @@ creating a symlink there needs a privilege a test cannot assume.
   — so what is lost is a completed operation, which recovery already classifies.
   This guarantee is weaker than on Unix.
 
-`safescope guard` is macOS only, through `sandbox-exec`, and refuses elsewhere
-rather than running a command unprotected. Everything else — the policy, the
-hook, the allowlist, drift detection — is on every platform.
+`safescope guard` needs a kernel that can take a capability away from a process:
+`sandbox-exec` on macOS, Landlock on Linux. Windows has no equivalent this crate
+will accept, so it refuses there. Everything else — the policy, the hook, the
+allowlist, drift detection — is on every platform.
 
 ## Installing
 
@@ -124,9 +126,15 @@ Measured on the same project: the agent completed the task through SafeScope in
 ten turns, both changes recorded, nothing changed outside — and asked to create
 a file with a shell redirect, it got `operation not permitted` from the kernel.
 
-macOS only, through `sandbox-exec`; elsewhere it refuses rather than running the
-command unprotected. It denies writes without exception, so a test run cannot
-write `__pycache__` either. That is the cost of the guarantee.
+Two kernels can do this and they say it differently. macOS gets a seatbelt
+profile denying writes under the workspace. Linux gets a Landlock ruleset, which
+has no deny rule — so the same sentence is said the other way round: read is
+granted on everything, write on every directory that is *not* on the way to the
+workspace. Both were run; the same nine tests pass on both.
+
+Elsewhere, and on a Linux before 5.13, it refuses rather than running the command
+unprotected. It denies writes without exception, so a test run cannot write
+`__pycache__` either. That is the cost of the guarantee.
 
 **Drift detection** is what notices when enforcement does not hold, and without
 a guard it will not always hold — a hook can be disabled, and the engine cannot check what it

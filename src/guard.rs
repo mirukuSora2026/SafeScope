@@ -19,9 +19,12 @@
 //!            └── safescope mcp  →  relays to the socket; writes nothing
 //! ```
 //!
-//! **macOS only.** The sandbox is the whole of what this offers, so where there
-//! is none it refuses rather than running the command unprotected — a guard that
-//! sometimes guards is worse than one that says it cannot.
+//! Two kernels can do this and they say it differently. macOS gets a seatbelt
+//! profile denying writes under the workspace; Linux gets a Landlock ruleset
+//! granting writes everywhere else, which is the same sentence in a language
+//! with no "except" — see [`landlock`]. Anywhere else, and on a Linux too old
+//! for Landlock, this refuses rather than running the command unprotected: a
+//! guard that sometimes guards is worse than one that says it cannot.
 //!
 //! It denies writes without exception, including caches and temporary files. A
 //! test run that wants to write `__pycache__` will find it cannot. That is the
@@ -30,6 +33,9 @@
 
 use std::path::{Path, PathBuf};
 use std::process::Command;
+
+#[cfg(target_os = "linux")]
+pub mod landlock;
 
 use crate::dataformatting::Msg;
 use crate::error::{Denial, Error, ErrorCode, Fault, Result};
@@ -42,6 +48,7 @@ use crate::registry;
 /// to contain a hostile program — it is removing one capability from a trusted
 /// one, and a profile that also broke its network access or its temporary files
 /// would be a profile people turn off.
+#[cfg(target_os = "macos")]
 fn profile(workspace: &Path) -> String {
     // Both the path as given and the path the kernel sees. On macOS `/var` is a
     // symlink to `/private/var`, so a profile naming only the first denies a
@@ -66,6 +73,7 @@ fn profile(workspace: &Path) -> String {
 }
 
 /// A seatbelt string literal.
+#[cfg(target_os = "macos")]
 fn quote(text: &str) -> String {
     let escaped = text.replace('\\', "\\\\").replace('"', "\\\"");
     format!("\"{escaped}\"")
@@ -83,7 +91,13 @@ fn unsupported() -> Error {
 /// Returns the command's own exit code, so this can stand in front of anything
 /// without changing what a script sees.
 pub fn run(workspace: &Path, command: &[String]) -> Result<i32> {
-    if !cfg!(target_os = "macos") {
+    if !cfg!(any(target_os = "macos", target_os = "linux")) {
+        return Err(unsupported());
+    }
+    // A Linux without Landlock is refused here rather than at the point of no
+    // return, so the command never starts believing it was guarded.
+    #[cfg(target_os = "linux")]
+    if landlock::abi_version().is_none() {
         return Err(unsupported());
     }
     // The command is `required` at the command line, so an empty one cannot
@@ -102,9 +116,18 @@ pub fn run(workspace: &Path, command: &[String]) -> Result<i32> {
     // state directory alone can overrun.
     let socket_path = socket::path_for(registration.id())?;
 
-    let policy_path = paths.root().join("guard.sb");
-    std::fs::write(&policy_path, profile(&root))
-        .map_err(|error| Error::Faulted(Fault::io("could not write the sandbox profile", error)))?;
+    // macOS needs a profile file for `sandbox-exec`; Linux builds its ruleset in
+    // memory and needs nothing on disk.
+    #[cfg(target_os = "macos")]
+    let profile_path = {
+        let path = paths.root().join("guard.sb");
+        std::fs::write(&path, profile(&root)).map_err(|error| {
+            Error::Faulted(Fault::io("could not write the sandbox profile", error))
+        })?;
+        path
+    };
+    #[cfg(not(target_os = "macos"))]
+    let profile_path = std::path::PathBuf::new();
 
     let runtime = tokio::runtime::Builder::new_multi_thread()
         .enable_all()
@@ -125,11 +148,7 @@ pub fn run(workspace: &Path, command: &[String]) -> Result<i32> {
         }
     );
 
-    let status = Command::new("sandbox-exec")
-        .arg("-f")
-        .arg(&policy_path)
-        .arg(program)
-        .args(arguments)
+    let status = sandboxed(program, arguments, &root, &profile_path)
         .env(SOCKET_ENV, &socket_path)
         .current_dir(&root)
         .status();
@@ -149,6 +168,58 @@ pub fn run(workspace: &Path, command: &[String]) -> Result<i32> {
 
     // A signalled child has no exit code. Reporting 0 would say it succeeded.
     Ok(status.code().unwrap_or(1))
+}
+
+/// The command, wrapped in whatever this kernel uses to take the workspace away.
+///
+/// macOS runs it under `sandbox-exec` with a profile file. Linux applies a
+/// Landlock ruleset between fork and exec, which needs no helper binary — and
+/// must not be applied any earlier, because this process is the engine and is
+/// the one thing that still has to be able to write there.
+#[cfg(target_os = "macos")]
+fn sandboxed(program: &str, arguments: &[String], _root: &Path, profile: &Path) -> Command {
+    let mut command = Command::new("sandbox-exec");
+    command.arg("-f").arg(profile).arg(program).args(arguments);
+    command
+}
+
+#[cfg(target_os = "linux")]
+fn sandboxed(program: &str, arguments: &[String], root: &Path, _profile: &Path) -> Command {
+    use std::os::fd::AsRawFd as _;
+    use std::os::unix::process::CommandExt as _;
+
+    let mut command = Command::new(program);
+    command.args(arguments);
+
+    // Built here, in the parent, because building it allocates and reads
+    // directories — neither of which is allowed after a fork. What runs in the
+    // child is two syscalls on a descriptor that is already open.
+    match landlock::build(root) {
+        Ok(ruleset) => {
+            // SAFETY: the closure runs between fork and exec and does nothing
+            // but call `prctl` and `landlock_restrict_self`, both of which are
+            // async-signal-safe. `ruleset` is moved in and stays open for the
+            // lifetime of the command.
+            unsafe {
+                command.pre_exec(move || restrict_current_thread(ruleset.as_raw_fd()));
+            }
+        }
+        Err(_) => {
+            // Refused before this point by the ABI check, so reaching here means
+            // the ruleset could not be built on a kernel that has Landlock. The
+            // command must not start unguarded, so it is replaced with one that
+            // cannot succeed rather than one that runs unprotected.
+            command = Command::new("/nonexistent/safescope-guard-failed");
+        }
+    }
+    command
+}
+
+#[cfg(target_os = "linux")]
+fn restrict_current_thread(ruleset: std::os::fd::RawFd) -> std::io::Result<()> {
+    // SAFETY: called from `pre_exec`, which is between fork and exec, with a
+    // descriptor this process opened and still holds.
+    unsafe { landlock::restrict_current_thread(ruleset) }
 }
 
 /// Where the guard would put its socket, for a workspace.

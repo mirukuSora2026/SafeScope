@@ -1,10 +1,14 @@
 //! Running a command that cannot write to the workspace.
 //!
-//! Against the real `sandbox-exec` and a real child process. The guard's whole
-//! claim is that the kernel refuses the write, so a test that stubbed the
-//! sandbox would be testing the claim by assuming it.
+//! Against the real kernel and a real child process — `sandbox-exec` on macOS,
+//! Landlock on Linux. The guard's whole claim is that the kernel refuses the
+//! write, so a test that stubbed the sandbox would be testing the claim by
+//! assuming it.
+//!
+//! The same tests run on both, because the claim is the same on both. Only the
+//! sentence the kernel is given differs.
 
-#![cfg(target_os = "macos")]
+#![cfg(any(target_os = "macos", target_os = "linux"))]
 
 use std::fs;
 use std::path::Path;
@@ -64,6 +68,22 @@ fn guarded(data: &Path, root: &Path, script: &str) -> std::process::Output {
         .expect("run the guard")
 }
 
+/// Whether this kernel can guard at all.
+///
+/// A Linux older than Landlock refuses, and these tests would then be asserting
+/// that a refusal refused. Skipping says so out loud rather than passing on a
+/// technicality.
+fn can_guard() -> bool {
+    #[cfg(target_os = "linux")]
+    {
+        if safescope::guard::landlock::abi_version().is_none() {
+            eprintln!("skipped: this kernel has no Landlock");
+            return false;
+        }
+    }
+    true
+}
+
 fn text(output: &std::process::Output) -> String {
     format!(
         "{}{}",
@@ -74,6 +94,9 @@ fn text(output: &std::process::Output) -> String {
 
 #[test]
 fn a_guarded_command_cannot_write_a_file_in_the_workspace() {
+    if !can_guard() {
+        return;
+    }
     let _serialised = env_lock();
     let (data, root) = workspace();
 
@@ -98,6 +121,9 @@ fn a_guarded_command_cannot_write_a_file_in_the_workspace() {
 fn a_guarded_command_cannot_create_a_file_either() {
     // A scope check is about paths that exist in a policy. This is about the
     // workspace, so a new file nobody wrote a rule for is refused too.
+    if !can_guard() {
+        return;
+    }
     let _serialised = env_lock();
     let (data, root) = workspace();
 
@@ -112,6 +138,9 @@ fn a_guarded_command_cannot_create_a_file_either() {
 
 #[test]
 fn a_guarded_command_cannot_delete_a_file() {
+    if !can_guard() {
+        return;
+    }
     let _serialised = env_lock();
     let (data, root) = workspace();
 
@@ -128,6 +157,9 @@ fn a_guarded_command_cannot_reach_around_through_another_program() {
     // all some way of running a command. Under the guard it does not matter
     // which program runs: the sandbox is inherited by everything started
     // inside it.
+    if !can_guard() {
+        return;
+    }
     let _serialised = env_lock();
     let (data, root) = workspace();
 
@@ -148,6 +180,9 @@ fn a_guarded_command_cannot_reach_around_through_another_program() {
 fn a_guarded_command_can_still_read_the_workspace() {
     // Denying reads would make the guard useless: an agent that cannot read the
     // code cannot change it correctly either.
+    if !can_guard() {
+        return;
+    }
     let _serialised = env_lock();
     let (data, root) = workspace();
 
@@ -163,6 +198,9 @@ fn a_guarded_command_can_still_read_the_workspace() {
 fn a_guarded_command_can_write_outside_the_workspace() {
     // The guard removes one capability, over one subtree. A profile that also
     // broke temporary files would be one people turn off.
+    if !can_guard() {
+        return;
+    }
     let _serialised = env_lock();
     let (data, root) = workspace();
     let elsewhere = TempDir::new().expect("elsewhere");
@@ -183,6 +221,9 @@ fn a_guarded_command_can_write_outside_the_workspace() {
 fn the_guard_tells_a_guarded_command_where_the_engine_is() {
     // The engine runs outside the sandbox, so what the host starts has to be a
     // relay to it. This variable is how `safescope mcp` knows which it is.
+    if !can_guard() {
+        return;
+    }
     let _serialised = env_lock();
     let (data, root) = workspace();
 
@@ -197,6 +238,9 @@ fn the_guard_tells_a_guarded_command_where_the_engine_is() {
 
 #[test]
 fn the_guard_reports_what_the_command_returned() {
+    if !can_guard() {
+        return;
+    }
     let _serialised = env_lock();
     let (data, root) = workspace();
 
@@ -212,6 +256,9 @@ fn the_guard_reports_what_the_command_returned() {
 fn the_socket_does_not_outlive_the_guarded_command() {
     // It lives beside the workspace's state, so a stale one would be picked up
     // by the next run and relayed to nothing.
+    if !can_guard() {
+        return;
+    }
     let _serialised = env_lock();
     let (data, root) = workspace();
 
