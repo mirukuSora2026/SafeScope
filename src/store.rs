@@ -193,9 +193,21 @@ pub fn write_atomically(path: &Path, contents: &[u8]) -> Result<()> {
         file.sync_all()?;
         drop(file);
         fs::rename(&temporary, path)?;
+
         // Without this the rename itself can be lost in a crash, leaving the old
         // contents in place while the caller believes the write succeeded.
-        fs::File::open(parent)?.sync_all()
+        //
+        // Only where the platform can. Opening a directory needs
+        // `FILE_FLAG_BACKUP_SEMANTICS` on Windows, which `File::open` does not
+        // ask for, so this failed there *after* a rename that had already
+        // succeeded — every atomic write in the crate would have returned an
+        // error having done its job, starting with approving a policy.
+        // `rename_is_durable` is the one place that says which platforms can,
+        // and `safescope doctor` says so to a person on one that cannot.
+        if crate::platform::rename_is_durable() {
+            fs::File::open(parent)?.sync_all()?;
+        }
+        Ok(())
     })();
 
     if let Err(error) = outcome {
