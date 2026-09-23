@@ -207,3 +207,123 @@ fn a_file_this_store_did_not_write_is_left_alone() {
     store.retain(&HashSet::new()).expect("retain");
     assert!(intruder.is_file(), "a foreign file was removed");
 }
+
+/// Staged payloads, which nothing removed at all.
+///
+/// A payload is written when a change is planned and read when it is applied.
+/// A plan that was refused, declined, expired or simply abandoned left its whole
+/// contents on disk for good, and unlike a snapshot nothing was ever going to
+/// ask for it again.
+mod staging {
+    use super::*;
+    use safescope::planner::PLAN_LIFETIME;
+
+    #[test]
+    fn a_payload_no_plan_can_still_reach_is_reclaimed() {
+        let _guard = env_lock();
+        let (_data, root) = workspace(POLICY);
+        let paths = registry::load(root.path())
+            .expect("registration")
+            .state_paths()
+            .expect("paths");
+        let journal = safescope::journal::Journal::open(&paths).expect("journal");
+        let staging = ContentStore::staging(&paths);
+
+        staging
+            .store(b"contents of a plan nobody applied")
+            .expect("store");
+        assert!(staging.usage_bytes().expect("usage") > 0);
+
+        // Swept as of a moment past the plan lifetime: any plan holding this can
+        // no longer be applied, so nothing can reach the payload either way.
+        let later = SystemTime::now() + PLAN_LIFETIME + Duration::from_secs(60);
+        let reclaimed = retention::sweep_staging(&journal, &staging, later).expect("sweep");
+
+        assert!(!reclaimed.is_empty(), "nothing was reclaimed");
+        assert_eq!(staging.usage_bytes().expect("usage"), 0);
+    }
+
+    #[test]
+    fn a_payload_a_plan_could_still_apply_is_kept() {
+        let _guard = env_lock();
+        let (_data, root) = workspace(POLICY);
+        let paths = registry::load(root.path())
+            .expect("registration")
+            .state_paths()
+            .expect("paths");
+        let journal = safescope::journal::Journal::open(&paths).expect("journal");
+        let staging = ContentStore::staging(&paths);
+
+        let hash = staging.store(b"a plan that is still live").expect("store");
+        let reclaimed =
+            retention::sweep_staging(&journal, &staging, SystemTime::now()).expect("sweep");
+
+        assert!(reclaimed.is_empty(), "a live plan lost its payload");
+        assert!(staging.verify(hash).expect("verify"));
+    }
+
+    #[test]
+    fn staging_the_same_contents_again_makes_them_wanted_again() {
+        // Content addressing means the second store writes nothing. Without
+        // marking it fresh, an age-based sweep would reclaim a payload the newer
+        // plan is still holding.
+        #[cfg(unix)]
+        {
+            let root = TempDir::new().expect("store");
+            let store = ContentStore::at(root.path().join("blobs"));
+            let hash = store.store(b"shared contents").expect("store");
+
+            // Age it, then store the same bytes again.
+            let path = {
+                let mut found = None;
+                for shard in fs::read_dir(root.path().join("blobs")).expect("read") {
+                    for entry in fs::read_dir(shard.expect("shard").path()).expect("read") {
+                        found = Some(entry.expect("entry").path());
+                    }
+                }
+                found.expect("a blob")
+            };
+            let old = SystemTime::now() - Duration::from_secs(3600);
+            set_mtime(&path, old);
+            assert!(
+                fs::metadata(&path)
+                    .expect("meta")
+                    .modified()
+                    .expect("mtime")
+                    < SystemTime::now() - Duration::from_secs(60)
+            );
+
+            store.store(b"shared contents").expect("store again");
+            assert!(
+                fs::metadata(&path)
+                    .expect("meta")
+                    .modified()
+                    .expect("mtime")
+                    > SystemTime::now() - Duration::from_secs(60),
+                "re-staging left the payload looking abandoned"
+            );
+            assert!(store.verify(hash).expect("verify"));
+        }
+    }
+}
+
+#[cfg(unix)]
+fn set_mtime(path: &std::path::Path, when: SystemTime) {
+    let since = when
+        .duration_since(SystemTime::UNIX_EPOCH)
+        .expect("after the epoch");
+    let stamp = rustix::fs::Timespec {
+        tv_sec: since.as_secs() as _,
+        tv_nsec: since.subsec_nanos() as _,
+    };
+    rustix::fs::utimensat(
+        rustix::fs::CWD,
+        path,
+        &rustix::fs::Timestamps {
+            last_access: stamp,
+            last_modification: stamp,
+        },
+        rustix::fs::AtFlags::empty(),
+    )
+    .expect("set mtime");
+}

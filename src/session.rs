@@ -347,13 +347,19 @@ impl WriteSession {
     /// Returns what it freed, so a caller can say so rather than tidying up
     /// behind a person's back.
     pub fn prune(&self) -> Result<Reclaimed> {
-        retention::sweep(
+        let now = SystemTime::now();
+        let staged = retention::sweep_staging(&self.journal, &self.staging, now)?;
+        let snapshots = retention::sweep(
             &self.journal,
             &self.snapshots,
             self.policy.recovery(),
             self.task,
-            SystemTime::now(),
-        )
+            now,
+        )?;
+        Ok(Reclaimed {
+            blobs: staged.blobs + snapshots.blobs,
+            bytes: staged.bytes + snapshots.bytes,
+        })
     }
 
     fn context<'a>(&self, grants: &'a [Grant]) -> EvaluationContext<'a> {

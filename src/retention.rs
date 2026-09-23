@@ -70,6 +70,29 @@ pub fn sweep(
     snapshots.retain(&keep)
 }
 
+/// Removes staged payloads no plan can still reach.
+///
+/// A payload is staged when a change is planned and read when it is applied.
+/// Nothing removed them, so every plan that was refused, declined, expired or
+/// simply abandoned left its whole contents on disk for good — and unlike a
+/// snapshot, nothing was ever going to ask for it again.
+///
+/// Two things are kept: anything an unsettled record still names, because that
+/// operation may yet run or be recovered, and anything younger than a plan's
+/// lifetime, because a plan older than that is refused rather than applied and
+/// therefore cannot reach its payload either way.
+pub fn sweep_staging(
+    journal: &Journal,
+    staging: &ContentStore,
+    now: SystemTime,
+) -> Result<Reclaimed> {
+    let mut keep: HashSet<ContentHash> = HashSet::new();
+    for record in journal.unsettled()? {
+        keep.extend(record.payload);
+    }
+    staging.retain_since(&keep, now - crate::planner::PLAN_LIFETIME)
+}
+
 /// Whether this record's recovery data is still owed to somebody.
 fn is_retained(
     record: &OperationRecord,

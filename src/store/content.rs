@@ -74,6 +74,12 @@ impl ContentStore {
         let hash = ContentHash::of_bytes(contents);
 
         if self.verify(hash).unwrap_or(false) {
+            // Marked as written now. Content addressing means a second plan with
+            // the same contents writes nothing, and the staging sweep decides by
+            // age — so without this it could reclaim a payload a newer plan is
+            // still holding. Best effort: a clock that refuses to be set is not
+            // a reason to fail a store that already succeeded.
+            self.mark_as_fresh(hash);
             return Ok(hash);
         }
 
@@ -89,6 +95,33 @@ impl ContentStore {
         }
         Ok(hash)
     }
+
+    /// Records that a blob is wanted again, for the sweep that decides by age.
+    ///
+    /// Unix only. Windows has no equivalent here yet, so a payload re-staged
+    /// there keeps the age of its first write and a sweep may reclaim it early —
+    /// which costs a refused apply and a re-plan, never a wrong result.
+    #[cfg(unix)]
+    fn mark_as_fresh(&self, hash: ContentHash) {
+        use rustix::fs::{AtFlags, Timestamps, utimensat};
+
+        let now = rustix::fs::Timespec {
+            tv_sec: 0,
+            tv_nsec: rustix::fs::UTIME_NOW,
+        };
+        let _ = utimensat(
+            rustix::fs::CWD,
+            self.path_of(hash),
+            &Timestamps {
+                last_access: now,
+                last_modification: now,
+            },
+            AtFlags::empty(),
+        );
+    }
+
+    #[cfg(not(unix))]
+    fn mark_as_fresh(&self, _hash: ContentHash) {}
 
     /// Reads stored contents back, checking them against their own name.
     pub fn read(&self, hash: ContentHash) -> Result<Vec<u8>> {
@@ -178,6 +211,27 @@ impl ContentStore {
     /// Recovery data is the thing being protected here, so a failure to tidy is
     /// not a reason to lose any.
     pub fn retain(&self, keep: &std::collections::HashSet<ContentHash>) -> Result<Reclaimed> {
+        self.sweep(keep, None)
+    }
+
+    /// Removes blobs that are neither named in `keep` nor written since `since`.
+    ///
+    /// For the staging store, where what is still wanted cannot be named in
+    /// full: a plan that was never applied left no record of its payload, and
+    /// only its age says whether any plan could still reach it.
+    pub fn retain_since(
+        &self,
+        keep: &std::collections::HashSet<ContentHash>,
+        since: std::time::SystemTime,
+    ) -> Result<Reclaimed> {
+        self.sweep(keep, Some(since))
+    }
+
+    fn sweep(
+        &self,
+        keep: &std::collections::HashSet<ContentHash>,
+        since: Option<std::time::SystemTime>,
+    ) -> Result<Reclaimed> {
         let mut reclaimed = Reclaimed::default();
         let shards = match fs::read_dir(&self.directory) {
             Ok(shards) => shards,
@@ -207,6 +261,14 @@ impl ContentStore {
                     continue;
                 };
                 if !metadata.is_file() {
+                    continue;
+                }
+                // Too young to be unreachable. A blob that cannot report its age
+                // is kept, because an age that cannot be established is not an
+                // age past the cutoff.
+                if let Some(since) = since
+                    && metadata.modified().is_ok_and(|written| written >= since)
+                {
                     continue;
                 }
                 if fs::remove_file(entry.path()).is_ok() {
