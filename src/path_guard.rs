@@ -13,6 +13,7 @@
 
 use std::path::{Path, PathBuf};
 
+use cap_fs_ext::DirExt as _;
 use cap_std::ambient_authority;
 use cap_std::fs::Dir;
 
@@ -104,7 +105,16 @@ impl Workspace {
                 }
             }
 
-            parent = parent.open_dir(component).map_err(|error| {
+            // `open_dir_nofollow`, not `open_dir`. The plain one follows a
+            // symlinked component — cap-std resolves links itself before it
+            // opens anything — so the check above and the open below were two
+            // questions about a name that can change in between, and a link put
+            // there after the check would land the whole operation in a
+            // directory the policy never saw.
+            parent = parent.open_dir_nofollow(component).map_err(|error| {
+                if is_a_symlink(&error) {
+                    return symlink_refused(path);
+                }
                 Error::Faulted(Fault::io("could not open a path component", error))
             })?;
         }
@@ -154,12 +164,20 @@ impl Resolved {
 }
 
 /// Reads the current state of the final component.
+///
+/// Opened first, and described from the open handle. Asking the path what it is
+/// and then opening it by name is two questions about a name that can change in
+/// between: a target that became a symlink after the check would be followed by
+/// the open — cap-std follows them by default — and the contents hashed, stored
+/// as the snapshot and later restored by undo would belong to a different file.
+/// One call decides, and the thing described is the thing that was hashed.
 fn observe(parent: &Dir, file_name: &str, path: &RelPath) -> Result<FileState> {
-    let metadata = match parent.symlink_metadata(file_name) {
-        Ok(metadata) => metadata,
+    let file = match open_without_following(parent, file_name) {
+        Ok(file) => file,
         Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
             return Ok(FileState::Absent);
         }
+        Err(error) if is_a_symlink(&error) => return Err(symlink_refused(path)),
         Err(error) => {
             return Err(Error::Faulted(Fault::io(
                 "could not inspect the target",
@@ -168,6 +186,12 @@ fn observe(parent: &Dir, file_name: &str, path: &RelPath) -> Result<FileState> {
         }
     };
 
+    let metadata = file
+        .metadata()
+        .map_err(|error| Error::Faulted(Fault::io("could not inspect the target", error)))?;
+
+    // Reached on a platform whose no-follow open hands back the link itself
+    // rather than refusing, which is how Windows spells it.
     if metadata.is_symlink() {
         return Err(symlink_refused(path));
     }
@@ -180,12 +204,41 @@ fn observe(parent: &Dir, file_name: &str, path: &RelPath) -> Result<FileState> {
         )));
     }
 
-    let file = parent
-        .open(file_name)
-        .map_err(|error| Error::Faulted(Fault::io("could not read the target", error)))?;
     let (hash, len) = ContentHash::of_reader(file)
         .map_err(|error| Error::Faulted(Fault::io("could not hash the target", error)))?;
     Ok(FileState::present(hash, len))
+}
+
+/// Opens a file without following a symlink at the final component.
+///
+/// The whole of what keeps a swapped target from being read. `cap-std` opens
+/// with `FollowSymlinks::Yes` by default, so this is asked for explicitly.
+pub fn open_without_following(parent: &Dir, file_name: &str) -> std::io::Result<cap_std::fs::File> {
+    use cap_fs_ext::{FollowSymlinks, OpenOptionsFollowExt as _};
+
+    // Through cap-std's own setting, not a raw `O_NOFOLLOW`. cap-std resolves
+    // symlinks itself before it opens anything, so a flag passed to the syscall
+    // arrives after the link has already been followed — which looked like it
+    // worked and did nothing.
+    let mut options = cap_std::fs::OpenOptions::new();
+    options.read(true).follow(FollowSymlinks::No);
+    parent.open_with(file_name, &options)
+}
+
+/// Whether an open failed because the name was a symlink.
+///
+/// `O_NOFOLLOW` reports it as a loop. It is the same answer as the check this
+/// replaced, arrived at without a window between asking and acting.
+#[cfg(unix)]
+fn is_a_symlink(error: &std::io::Error) -> bool {
+    error.raw_os_error() == Some(libc::ELOOP)
+}
+
+#[cfg(not(unix))]
+fn is_a_symlink(_error: &std::io::Error) -> bool {
+    // Windows reports the link by handing back the reparse point rather than by
+    // refusing, so the metadata check downstream is what catches it there.
+    false
 }
 
 fn symlink_refused(path: &RelPath) -> Error {

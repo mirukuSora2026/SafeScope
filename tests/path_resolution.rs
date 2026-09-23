@@ -214,3 +214,74 @@ fn opening_a_missing_workspace_is_a_fault_not_a_refusal() {
     assert_eq!(error.code(), ErrorCode::IoFailed);
     assert!(!error.is_denial());
 }
+
+/// What the refusal of a symlink actually rests on.
+///
+/// Both the component walk and the target read depend on `cap-std` refusing to
+/// follow a link, not on the check that runs beside them — a check and an open
+/// are two questions about a name that can change in between. These pin the
+/// dependency's behaviour, so a version that started following links fails here
+/// rather than in somebody's workspace.
+#[cfg(unix)]
+mod what_the_refusal_rests_on {
+    use super::*;
+
+    #[test]
+    fn opening_the_target_does_not_follow_a_link() {
+        let root = TempDir::new().expect("workspace");
+        std::fs::write(root.path().join("real.txt"), "the other file").expect("write");
+        std::os::unix::fs::symlink("real.txt", root.path().join("link.txt")).expect("symlink");
+
+        let directory =
+            cap_std::fs::Dir::open_ambient_dir(root.path(), cap_std::ambient_authority())
+                .expect("open");
+
+        let opened = safescope::path_guard::open_without_following(&directory, "link.txt");
+        assert!(
+            opened.is_err(),
+            "the link was followed, so a target swapped after the check would be read"
+        );
+    }
+
+    #[test]
+    fn opening_the_target_still_works_on_a_real_file() {
+        // The refusal has to cost nothing in the ordinary case.
+        let root = TempDir::new().expect("workspace");
+        std::fs::write(root.path().join("real.txt"), "contents").expect("write");
+
+        let directory =
+            cap_std::fs::Dir::open_ambient_dir(root.path(), cap_std::ambient_authority())
+                .expect("open");
+
+        assert!(safescope::path_guard::open_without_following(&directory, "real.txt").is_ok());
+    }
+
+    #[test]
+    fn opening_a_directory_component_does_not_follow_a_link() {
+        // The component walk checks and then calls `open_dir`. The check is for
+        // the message; this is what makes the walk safe.
+        let root = TempDir::new().expect("workspace");
+        std::fs::create_dir(root.path().join("real")).expect("mkdir");
+        std::os::unix::fs::symlink("real", root.path().join("link")).expect("symlink");
+
+        let directory =
+            cap_std::fs::Dir::open_ambient_dir(root.path(), cap_std::ambient_authority())
+                .expect("open");
+
+        use cap_fs_ext::DirExt as _;
+        assert!(
+            directory.open_dir_nofollow("link").is_err(),
+            "a symlinked directory component was opened, so the walk can be diverted"
+        );
+        assert!(
+            directory.open_dir_nofollow("real").is_ok(),
+            "a real one still opens"
+        );
+
+        // And the plain one does follow, which is why the walk must not use it.
+        assert!(
+            directory.open_dir("link").is_ok(),
+            "cap-std stopped following; the comment in path_guard should be revisited"
+        );
+    }
+}

@@ -79,6 +79,16 @@ the tests.
   the change budget. Protected paths still apply. Checking either would trap
   people: a rule allowing `create` but not `trash` would let the engine make a
   file it then refuses to remove.
+- Resolution opens without following, and never checks a name and then opens it.
+  `cap-std` follows symlinks by default and resolves them itself before it opens
+  anything, so a raw `O_NOFOLLOW` never reaches the syscall — the flag arrives
+  after the link has been followed. Use `follow(FollowSymlinks::No)` for a file
+  and `open_dir_nofollow` for a component, and take the metadata from the open
+  handle. A check beside an open is two questions about a name that can change
+  in between, and the thing described must be the thing that was read.
+- Where safety rests on a dependency's behaviour, a test asserts that behaviour
+  directly. `open_dir` following a symlinked component was invisible until a
+  test asked it the question, because the check beside it hid the answer.
 - A platform is supported when it has been run, not when it compiles. The first
   Linux run found every directory flush failing with EBADF, on code that had
   built cleanly for months. Say "compiles, never run" until CI says otherwise.

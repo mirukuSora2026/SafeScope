@@ -28,6 +28,10 @@ fault-injection = []
 [dependencies]
 blake3 = "1.8.7"
 cap-std = "4.0.3"
+# For `follow(FollowSymlinks::No)`, which cap-std keeps behind this crate. A
+# raw O_NOFOLLOW never reaches the syscall: cap-std resolves symlinks itself
+# before opening, so the flag arrives after the link has already been followed.
+cap-fs-ext = "4.0.3"
 clap = { version = "4.6.7", features = ["derive"] }
 globset = "0.4.20"
 libc = "0.2.189"
