@@ -73,8 +73,20 @@ jobs:
     # The plugin as somebody installs it, not as the tests rebuild it. The
     # binary the manifest names is not checked in, so this is the job that would
     # have caught a release whose plugin loads and silently does nothing.
-    name: packaged plugin
-    runs-on: macos-latest
+    #
+    # One artifact per platform, because the binary inside is native to the
+    # machine that built it. A single "plugin" download would be a plugin that
+    # works for whoever built it and silently does nothing for everybody else.
+    name: packaged plugin (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: macos-latest
+            label: macos-arm64
+          - os: ubuntu-latest
+            label: linux-x86_64
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
@@ -85,7 +97,7 @@ jobs:
         run: cargo test --test plugin_package
       - uses: actions/upload-artifact@v4
         with:
-          name: safescope-plugin-macos
+          name: safescope-plugin-${{ matrix.label }}
           path: |
             plugin/
             LICENSE
