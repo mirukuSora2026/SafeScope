@@ -55,6 +55,7 @@ uuid = { version = "1.26.1", features = ["v4", "serde"] }
 # no-overwrite rename, an advisory lock, and the directory flush it does not have.
 [target.'cfg(windows)'.dependencies]
 windows-sys = { version = "0.60.2", features = [
+    "Wdk_Storage_FileSystem",
     "Win32_Foundation",
     "Win32_Storage_FileSystem",
     "Win32_System_IO",
