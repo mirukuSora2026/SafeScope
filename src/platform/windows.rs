@@ -34,8 +34,17 @@ use windows_sys::Win32::Storage::FileSystem::{
 };
 use windows_sys::Win32::System::IO::OVERLAPPED;
 
-/// `DELETE`, which is the access a rename needs on the file being renamed.
-const DELETE_ACCESS: u32 = 0x0001_0000;
+/// What a rename needs on the handle of the file being renamed.
+///
+/// `DELETE` to move the name, and `SYNCHRONIZE` because without it the handle is
+/// asynchronous in NT's terms and `SetFileInformationByHandle` refuses it with
+/// ERROR_INVALID_PARAMETER — not the access error one would expect, which is
+/// what made it look like a malformed structure.
+///
+/// Both are needed explicitly: `cap-std` treats `access_mode` as the whole mask
+/// rather than as something to combine with `read`, so whatever is not named
+/// here is not granted.
+const RENAME_ACCESS: u32 = 0x0001_0000 | 0x0010_0000;
 
 /// Everything, so a rename does not fail because something else has it open.
 ///
@@ -61,7 +70,7 @@ pub fn rename_no_replace(
         use cap_std::fs::OpenOptionsExt as _;
         options
             .read(true)
-            .access_mode(DELETE_ACCESS)
+            .access_mode(RENAME_ACCESS)
             .share_mode(SHARE_ALL);
     }
     let file = from_directory.open_with(from_name, &options)?;
@@ -117,7 +126,21 @@ pub fn rename_no_replace(
         )
     };
     if outcome == 0 {
-        return Err(translate(std::io::Error::last_os_error()));
+        let error = std::io::Error::last_os_error();
+        // Carrying what was attempted. This call reports several different
+        // mistakes as one code, and a bare "the parameter is incorrect" sent an
+        // earlier fix after the wrong one.
+        return Err(match error.raw_os_error() {
+            Some(code) => translate(std::io::Error::new(
+                error.kind(),
+                format!(
+                    "{error} (code {code}; name {} bytes, buffer {} bytes, access {RENAME_ACCESS:#x})",
+                    name_bytes,
+                    words * std::mem::size_of::<u64>()
+                ),
+            )),
+            None => translate(error),
+        });
     }
     Ok(())
 }
