@@ -69,16 +69,28 @@ pub fn rename_no_replace(
     // FILE_RENAME_INFO ends in a variable-length name, so it is built in a byte
     // buffer rather than as a value: the struct's own size describes only the
     // first character of it.
-    let name: Vec<u16> = Path::new(to_name)
-        .as_os_str()
-        .encode_wide()
-        .collect::<Vec<u16>>();
+    //
+    // The name is NUL-terminated and the length excludes the terminator, which
+    // is what the documentation asks for and reads like a contradiction until
+    // both halves are read together: "FileName — a NUL-terminated wide-character
+    // string", "FileNameLength — the size of FileName in bytes; a terminating
+    // null character is not required". Writing the name without one was accepted
+    // by every compiler and refused by the kernel with ERROR_INVALID_PARAMETER.
+    let mut name: Vec<u16> = Path::new(to_name).as_os_str().encode_wide().collect();
     let name_bytes = name.len() * std::mem::size_of::<u16>();
-    let header = std::mem::size_of::<FILE_RENAME_INFO>();
-    let mut buffer = vec![0u8; header + name_bytes];
+    name.push(0);
 
-    // SAFETY: `buffer` is at least `header` bytes and correctly aligned for
-    // FILE_RENAME_INFO, because it is the only thing written at offset zero.
+    // `FileName[1]` already reserves one character inside the struct, so the
+    // terminator lands inside the space `size_of` accounts for.
+    // Aligned for the struct, which a `Vec<u8>` does not promise: its buffer is
+    // guaranteed only byte alignment, and this one holds a HANDLE. A vector of
+    // the aligned element gives the guarantee for free.
+    let header = std::mem::size_of::<FILE_RENAME_INFO>();
+    let words = (header + name_bytes).div_ceil(std::mem::size_of::<u64>());
+    let mut buffer: Vec<u64> = vec![0; words];
+
+    // SAFETY: `buffer` is at least `header + name_bytes` bytes and aligned to
+    // eight, which is what FILE_RENAME_INFO needs for the handle it carries.
     let info = buffer.as_mut_ptr().cast::<FILE_RENAME_INFO>();
     unsafe {
         (*info).Anonymous.ReplaceIfExists = false;
@@ -101,7 +113,7 @@ pub fn rename_no_replace(
             file.as_raw_handle() as HANDLE,
             FileRenameInfo,
             buffer.as_ptr().cast(),
-            buffer.len() as u32,
+            (words * std::mem::size_of::<u64>()) as u32,
         )
     };
     if outcome == 0 {
