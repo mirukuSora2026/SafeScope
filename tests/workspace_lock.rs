@@ -92,45 +92,61 @@ fn the_lock_file_outlives_the_lock() {
     assert!(path.is_file());
 }
 
+/// Tells the test binary, started again as a child, to be the lock's holder.
+const HOLD_ENV: &str = "SAFESCOPE_TEST_HOLD_LOCK_AT";
+
+/// The other process in the test below, not a test in its own right.
+///
+/// The test starts this binary again with only this function selected, so the
+/// lock is taken by the engine's own code in a process that can be killed —
+/// which is what a crash is. Run any other way it does nothing.
+#[test]
+fn hold_the_lock_until_killed() {
+    let Some(path) = std::env::var_os(HOLD_ENV) else {
+        return;
+    };
+    let _held = WorkspaceLock::acquire_at(std::path::Path::new(&path)).expect("hold");
+    println!("held");
+    std::io::Write::flush(&mut std::io::stdout()).expect("flush");
+    std::thread::sleep(std::time::Duration::from_secs(60));
+}
+
 #[test]
 fn the_lock_is_released_when_the_holder_dies() {
     let _serialised = fork_lock();
     // A crash must not leave a workspace permanently unusable. The kernel drops
-    // the lock with the process, which is why this is an flock rather than a
-    // file somebody has to remember to clean up.
+    // the lock with the process — an flock on Unix, LockFileEx on Windows —
+    // which is why it is not a file somebody has to remember to clean up.
     //
     // The first version of this test shelled out to flock(1), which does not
-    // exist on macOS — so it passed while proving nothing. The child is now
-    // checked to be genuinely holding the lock before anything is concluded
-    // from letting it go.
+    // exist on macOS, and the second to Python's fcntl, which does not exist on
+    // Windows and was skipped wherever Python was missing — each passed without
+    // asking the question somewhere. The holder is now this binary, taking the
+    // lock through the engine's own code, and the child is checked to be
+    // genuinely holding it before anything is concluded from letting it go.
     let directory = TempDir::new().expect("temp dir");
     let path = lock_path(&directory);
     std::fs::create_dir_all(path.parent().expect("parent")).expect("mkdir");
 
-    let holder = Command::new("python3")
-        .arg("-c")
-        .arg(
-            "import fcntl, sys, time\n\
-             handle = open(sys.argv[1], 'w')\n\
-             fcntl.flock(handle, fcntl.LOCK_EX)\n\
-             print('held', flush=True)\n\
-             time.sleep(60)\n",
-        )
-        .arg(&path)
+    let mut holder = Command::new(std::env::current_exe().expect("this test binary"))
+        .args(["hold_the_lock_until_killed", "--exact", "--nocapture"])
+        .env(HOLD_ENV, &path)
         .stdout(Stdio::piped())
-        .spawn();
+        .spawn()
+        .expect("start the holder");
 
-    let Ok(mut holder) = holder else {
-        eprintln!("skipped: python3 is needed to hold a lock from another process");
-        return;
-    };
-
-    // Wait for the child to say it has the lock, rather than guessing at a delay.
-    let mut announcement = String::new();
-    BufReader::new(holder.stdout.take().expect("stdout"))
-        .read_line(&mut announcement)
-        .expect("read");
-    assert_eq!(announcement.trim(), "held");
+    // Wait for the child to say it has the lock, rather than guessing at a
+    // delay. The harness prints its own lines first.
+    let mut stdout = BufReader::new(holder.stdout.take().expect("stdout"));
+    let mut line = String::new();
+    loop {
+        line.clear();
+        let read = stdout.read_line(&mut line).expect("read");
+        assert!(read > 0, "the holder exited without taking the lock");
+        if line.trim() == "held" {
+            break;
+        }
+    }
 
     assert_eq!(
         WorkspaceLock::acquire_at(&path).unwrap_err().code(),
