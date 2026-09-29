@@ -25,16 +25,23 @@ the `windows-latest` job in CI is green — the first time this was run on Linux
 it turned out every durability guarantee had been silently unenforced there, and
 that is what an unrun platform is worth.
 
-Windows skips three symlink tests, because creating a symlink there needs a
-privilege a test cannot assume, and the guard's nine, because it has no sandbox
-to run under. A Linux older than Landlock (before 5.13) skips the guard's nine
+On Windows the symlink tests need Developer Mode or an elevated prompt to make
+a link; without either they fail and say why, rather than passing without having
+asked. The guard's nine are skipped there, because it has no sandbox to run
+under. A Linux older than Landlock (before 5.13) skips the guard's nine
 too and refuses to guard, rather than running a command unprotected.
 
 ### What Windows does differently
 
-- **No-overwrite rename** is `SetFileInformationByHandle` with `FileRenameInfo`:
-  relative to a directory handle, and refused by the kernel when the
-  destination is taken. Not a check followed by a rename.
+- **No-overwrite rename** is `NtSetInformationFile` with
+  `FileRenameInformation`: relative to a directory handle, and refused by the
+  kernel when the destination is taken. Not a check followed by a rename. The
+  documented Win32 call, `SetFileInformationByHandle`, takes the same structure
+  and refuses any directory handle in it — measured on the CI runner — and
+  passing it a full path instead would resolve the name again at the moment of
+  the rename.
+- **Engine state** lives under `%LOCALAPPDATA%\safescope` unless
+  `SAFESCOPE_DATA_DIR` says otherwise.
 - **The single-writer lock** is `LockFileEx`, which refuses rather than waits
   and is released when the process dies.
 - **A directory cannot be flushed.** Windows has no equivalent, so a crash

@@ -339,6 +339,12 @@ fn the_readme_does_not_promise_a_sandbox() {
     );
 }
 
+// Not on Windows, where no plugin is packaged. Whether the host finds
+// `bin/safescope` as `bin/safescope.exe` is a question about the host that has
+// not been asked of it, and a manifest is checked against what the host does,
+// never guessed at. The engine runs there; the plugin around it is unbuilt, and
+// the README says so.
+#[cfg(not(windows))]
 #[test]
 fn the_packaged_plugin_answers_where_the_manifest_says_it_is() {
     // Every other test here substitutes the test binary for the path the

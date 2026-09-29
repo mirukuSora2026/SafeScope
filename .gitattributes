@@ -1,0 +1,7 @@
+# Line endings are LF everywhere, including a Windows checkout.
+#
+# The plugin's files are read by the host byte for byte, and a checkout that
+# turned them into CRLF gave every skill a frontmatter the tests could not find:
+# the same package would differ by the machine that cloned it. The shell scripts
+# stop running under CRLF at all.
+* text=auto eol=lf
