@@ -190,8 +190,9 @@ fn observe(parent: &Dir, file_name: &str, path: &RelPath) -> Result<FileState> {
         .metadata()
         .map_err(|error| Error::Faulted(Fault::io("could not inspect the target", error)))?;
 
-    // Reached on a platform whose no-follow open hands back the link itself
-    // rather than refusing, which is how Windows spells it.
+    // Not reached where the open refuses a link, which cap-std does on both
+    // Unix and Windows. Kept so that a platform whose no-follow open hands back
+    // the link itself still refuses it rather than hashing a reparse point.
     if metadata.is_symlink() {
         return Err(symlink_refused(path));
     }
@@ -214,14 +215,23 @@ fn observe(parent: &Dir, file_name: &str, path: &RelPath) -> Result<FileState> {
 /// The whole of what keeps a swapped target from being read. `cap-std` opens
 /// with `FollowSymlinks::Yes` by default, so this is asked for explicitly.
 pub fn open_without_following(parent: &Dir, file_name: &str) -> std::io::Result<cap_std::fs::File> {
-    use cap_fs_ext::{FollowSymlinks, OpenOptionsFollowExt as _};
+    use cap_fs_ext::{FollowSymlinks, OpenOptionsFollowExt as _, OpenOptionsMaybeDirExt as _};
 
     // Through cap-std's own setting, not a raw `O_NOFOLLOW`. cap-std resolves
     // symlinks itself before it opens anything, so a flag passed to the syscall
     // arrives after the link has already been followed — which looked like it
     // worked and did nothing.
+    //
+    // `maybe_dir` so that a directory opens rather than failing. Unix opens one
+    // for reading anyway; Windows refuses with "access denied" unless asked for
+    // backup semantics, which made a directory target a fault — the engine
+    // failing — rather than the refusal it is. Opened, it is described by its
+    // handle like anything else and refused as not a regular file.
     let mut options = cap_std::fs::OpenOptions::new();
-    options.read(true).follow(FollowSymlinks::No);
+    options
+        .read(true)
+        .follow(FollowSymlinks::No)
+        .maybe_dir(true);
     parent.open_with(file_name, &options)
 }
 
@@ -234,10 +244,19 @@ fn is_a_symlink(error: &std::io::Error) -> bool {
     error.raw_os_error() == Some(libc::ELOOP)
 }
 
-#[cfg(not(unix))]
+/// On Windows cap-std opens the reparse point, sees a link, and refuses with
+/// ERROR_STOPPED_ON_SYMLINK — its stand-in for `O_NOFOLLOW`'s loop. Reporting
+/// that as anything else made a symlink the engine failing rather than a
+/// refusal.
+#[cfg(windows)]
+fn is_a_symlink(error: &std::io::Error) -> bool {
+    /// ERROR_STOPPED_ON_SYMLINK.
+    const STOPPED_ON_SYMLINK: i32 = 681;
+    error.raw_os_error() == Some(STOPPED_ON_SYMLINK)
+}
+
+#[cfg(not(any(unix, windows)))]
 fn is_a_symlink(_error: &std::io::Error) -> bool {
-    // Windows reports the link by handing back the reparse point rather than by
-    // refusing, so the metadata check downstream is what catches it there.
     false
 }
 

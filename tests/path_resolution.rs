@@ -33,6 +33,29 @@ fn write(root: &Path, relative: &str, contents: &[u8]) {
     file.write_all(contents).expect("write file");
 }
 
+// Windows makes a symlink only with Developer Mode on or from an elevated
+// prompt. The CI runner has that; a machine without it fails here and says why,
+// rather than passing without having asked the question — the refusals these
+// cover were wrong on Windows for as long as they did not run there.
+#[cfg(windows)]
+const WINDOWS_SYMLINK: &str = "symlink: Windows needs Developer Mode or an elevated prompt";
+
+/// A symlink at `link` naming the file `target`.
+fn symlink_file(target: &Path, link: &Path) {
+    #[cfg(unix)]
+    std::os::unix::fs::symlink(target, link).expect("symlink");
+    #[cfg(windows)]
+    std::os::windows::fs::symlink_file(target, link).expect(WINDOWS_SYMLINK);
+}
+
+/// A symlink at `link` naming the directory `target`.
+fn symlink_dir(target: &Path, link: &Path) {
+    #[cfg(unix)]
+    std::os::unix::fs::symlink(target, link).expect("symlink");
+    #[cfg(windows)]
+    std::os::windows::fs::symlink_dir(target, link).expect(WINDOWS_SYMLINK);
+}
+
 #[test]
 fn reports_an_existing_file_with_its_hash_and_length() {
     let (_root, workspace) = workspace();
@@ -75,35 +98,28 @@ fn the_parent_handle_reaches_the_target() {
     assert!(metadata.is_file());
 }
 
-// Creating a symlink on Windows needs a privilege a test cannot assume, so
-// these run where one can be made. The engine's refusal itself is not
-// Unix-specific — it comes from `symlink_metadata`, which Windows has — but it
-// is unverified there, and a test that silently did not run would be worse than
-// one that is openly absent.
-#[cfg(unix)]
 #[test]
 fn refuses_a_symlink_as_the_target() {
     let (root, workspace) = workspace();
-    std::os::unix::fs::symlink("Login.java", root.path().join("src/auth/Alias.java"))
-        .expect("symlink");
+    symlink_file(
+        Path::new("Login.java"),
+        &root.path().join("src/auth/Alias.java"),
+    );
 
     let error = workspace.resolve(&path("src/auth/Alias.java")).unwrap_err();
     assert_eq!(error.code(), ErrorCode::UnsupportedOperation);
 }
 
-// Creating a symlink on Windows needs a privilege a test cannot assume, so
-// these run where one can be made. The engine's refusal itself is not
-// Unix-specific — it comes from `symlink_metadata`, which Windows has — but it
-// is unverified there, and a test that silently did not run would be worse than
-// one that is openly absent.
-#[cfg(unix)]
 #[test]
 fn refuses_a_symlink_in_a_parent_component() {
     // The classic escape: everything about the name looks fine, and the link
     // moves the operation somewhere else entirely.
     let (root, workspace) = workspace();
     fs::create_dir_all(root.path().join("elsewhere")).expect("create dir");
-    std::os::unix::fs::symlink("../elsewhere", root.path().join("src/link")).expect("symlink");
+    symlink_dir(
+        &Path::new("..").join("elsewhere"),
+        &root.path().join("src/link"),
+    );
 
     let error = workspace
         .resolve(&path("src/link/Target.java"))
@@ -111,17 +127,15 @@ fn refuses_a_symlink_in_a_parent_component() {
     assert_eq!(error.code(), ErrorCode::UnsupportedOperation);
 }
 
-// Creating a symlink on Windows needs a privilege a test cannot assume, so
-// these run where one can be made. The engine's refusal itself is not
-// Unix-specific — it comes from `symlink_metadata`, which Windows has — but it
-// is unverified there, and a test that silently did not run would be worse than
-// one that is openly absent.
-#[cfg(unix)]
 #[test]
 fn refuses_a_symlink_pointing_outside_the_workspace() {
     let (root, workspace) = workspace();
-    std::os::unix::fs::symlink("/etc/hosts", root.path().join("src/auth/Escape.java"))
-        .expect("symlink");
+    let outside = TempDir::new().expect("outside");
+    write(outside.path(), "secret.txt", b"not in the workspace");
+    symlink_file(
+        &outside.path().join("secret.txt"),
+        &root.path().join("src/auth/Escape.java"),
+    );
 
     let error = workspace
         .resolve(&path("src/auth/Escape.java"))
@@ -222,7 +236,6 @@ fn opening_a_missing_workspace_is_a_fault_not_a_refusal() {
 /// are two questions about a name that can change in between. These pin the
 /// dependency's behaviour, so a version that started following links fails here
 /// rather than in somebody's workspace.
-#[cfg(unix)]
 mod what_the_refusal_rests_on {
     use super::*;
 
@@ -230,7 +243,7 @@ mod what_the_refusal_rests_on {
     fn opening_the_target_does_not_follow_a_link() {
         let root = TempDir::new().expect("workspace");
         std::fs::write(root.path().join("real.txt"), "the other file").expect("write");
-        std::os::unix::fs::symlink("real.txt", root.path().join("link.txt")).expect("symlink");
+        symlink_file(Path::new("real.txt"), &root.path().join("link.txt"));
 
         let directory =
             cap_std::fs::Dir::open_ambient_dir(root.path(), cap_std::ambient_authority())
@@ -262,7 +275,7 @@ mod what_the_refusal_rests_on {
         // the message; this is what makes the walk safe.
         let root = TempDir::new().expect("workspace");
         std::fs::create_dir(root.path().join("real")).expect("mkdir");
-        std::os::unix::fs::symlink("real", root.path().join("link")).expect("symlink");
+        symlink_dir(Path::new("real"), &root.path().join("link"));
 
         let directory =
             cap_std::fs::Dir::open_ambient_dir(root.path(), cap_std::ambient_authority())
