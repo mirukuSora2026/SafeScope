@@ -205,7 +205,7 @@ plugin/                   the Claude Code package
 ├─ .mcp.json              the safescope MCP server
 ├─ hooks/hooks.json       PreToolUse, SessionStart, Stop
 ├─ skills/                start, plan, status, history, undo, finish
-└─ bin/safescope          built by scripts/build-plugin.sh, not checked in
+└─ bin/safescope.exe      built by scripts/build-plugin.sh, not checked in
 ```
 
 ## Commands

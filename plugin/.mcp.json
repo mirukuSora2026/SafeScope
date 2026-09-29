@@ -1,7 +1,7 @@
 {
   "mcpServers": {
     "safescope": {
-      "command": "${CLAUDE_PLUGIN_ROOT}/bin/safescope",
+      "command": "${CLAUDE_PLUGIN_ROOT}/bin/safescope.exe",
       "args": [
         "mcp"
       ]

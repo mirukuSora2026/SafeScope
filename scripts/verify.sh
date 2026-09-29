@@ -36,7 +36,7 @@ gate 'build faults'  cargo build --all-targets --features fault-injection
 gate 'clippy'        cargo clippy --all-targets -- -D warnings
 gate 'clippy faults' cargo clippy --all-targets --features fault-injection -- -D warnings
 # Before the tests, because one of them drives the binary this produces. The
-# plugin's manifest names `bin/safescope`, which is not checked in, so without
+# plugin's manifest names `bin/safescope.exe`, which is not checked in, so without
 # this a fresh clone has a plugin that silently does nothing.
 gate 'package'       ./scripts/build-plugin.sh
 gate 'tests'         cargo test

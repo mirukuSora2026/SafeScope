@@ -14,3 +14,4 @@
 
 # Built per platform by scripts/build-plugin.sh; not checked in.
 plugin/bin/safescope
+plugin/bin/safescope.exe

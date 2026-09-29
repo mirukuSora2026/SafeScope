@@ -15,9 +15,9 @@ The status output says so, and so should you.
 
 | | engine | `safescope guard` | plugin package | evidence |
 |---|---|---|---|---|
-| macOS (Apple silicon) | every gate, 445 tests | yes — `sandbox-exec` | built | run here and in CI |
-| Linux (x86-64, arm64) | every gate, 445 tests | yes — Landlock | built | CI (x86-64), Docker (arm64) |
-| Windows (x86-64) | build, clippy, 434 tests | no — refuses | **not built** | CI (`windows-latest`) |
+| macOS (Apple silicon) | every gate, 446 tests | yes — `sandbox-exec` | built | run here and in CI |
+| Linux (x86-64, arm64) | every gate, 446 tests | yes — Landlock | built | CI (x86-64), Docker (arm64) |
+| Windows (x86-64) | build, clippy, every test that applies | no — refuses | built, **unsigned** | CI (`windows-latest`) |
 
 Every row was run, not inferred. Windows shows why that matters: the port
 compiled and linted cleanly while its no-overwrite rename failed on every call,
@@ -25,12 +25,13 @@ and the first run of the whole suite found drift detection blind to every
 subdirectory — a clean report for a workspace that was not.
 
 What the Windows row does not cover. It was run on the CI runner, a Windows
-Server image with administrator rights, not on a desktop. No plugin is packaged
-for Windows, because how the host finds the binary there has not been asked of
-it. And a desktop with Smart App Control on refuses to run an unsigned
-executable at all — including the build scripts `cargo` makes on the way, so
-building from source fails there too — so a Windows package would need a signed
-binary before it could reach those machines.
+Server image with administrator rights, not on a desktop, and the plugin has
+not been loaded by the host there — CI can check that the binary the manifests
+name answers, not that Claude Code on Windows starts it. And the binary is
+unsigned: a desktop with Smart App Control on refuses to run it at all, as it
+refuses the build scripts `cargo` makes on the way, so building from source
+fails there too. Until it is signed, the Windows package reaches only machines
+where Smart App Control is off.
 
 On Windows the symlink tests need Developer Mode or an elevated prompt to make
 a link; without either they fail and say why, rather than passing without having
@@ -69,8 +70,14 @@ allowlist, drift detection — is on every platform.
 ```
 
 The binary is not checked in, so that step is not optional: the manifest names
-`bin/safescope`, and a manifest whose binary is absent is a plugin that loads
-and silently does nothing.
+`bin/safescope.exe`, and a manifest whose binary is absent is a plugin that
+loads and silently does nothing.
+
+It is called `safescope.exe` on every platform. On Windows the host requires a
+hook's command to resolve to "a real executable such as a .exe" and documents
+nothing about finding one without the suffix, so that is the name the manifests
+give; on macOS and Linux the suffix is only a name. On Windows, run the script
+from Git Bash.
 
 Then add the plugin directory in Claude Code. In the project:
 
@@ -182,7 +189,7 @@ plugin/
 ├── .mcp.json                 the safescope MCP server
 ├── hooks/hooks.json          PreToolUse, SessionStart, Stop
 ├── skills/                   start, plan, status, history, undo, finish
-└── bin/safescope             built by scripts/build-plugin.sh
+└── bin/safescope.exe         built by scripts/build-plugin.sh
 ```
 
 Skills are instructions, not enforcement. Every check they describe is also made

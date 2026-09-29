@@ -50,10 +50,10 @@ jobs:
         run: ./scripts/verify.sh
 
   windows:
-    # The port compiles here and on a cross-build, but only this job has ever
-    # run it. Until it is green, Windows is untested rather than supported — the
-    # first Linux run found every durability guarantee silently unenforced, and
-    # that is what an unrun platform is worth.
+    # The only place the Windows port runs. Its first full run found drift
+    # detection blind to every subdirectory, on code that had compiled and
+    # linted cleanly throughout — which is what an unrun platform is worth.
+    # No sandbox here, so not `verify.sh`: its guard gates cannot apply.
     name: Windows
     runs-on: windows-latest
     steps:
@@ -66,6 +66,11 @@ jobs:
         run: cargo build --all-targets
       - name: Clippy
         run: cargo clippy --all-targets -- -D warnings
+      - name: Build the plugin
+        # Before the tests, as `verify.sh` does elsewhere: one of them runs the
+        # binary the manifests name. Git Bash, which every runner has.
+        shell: bash
+        run: ./scripts/build-plugin.sh
       - name: Tests
         # Every file, not only up to the first that fails. Most of the suite has
         # never run here, and stopping at the first red file would take one push
@@ -90,6 +95,13 @@ jobs:
             label: macos-arm64
           - os: ubuntu-latest
             label: linux-x86_64
+          # Unsigned. A desktop with Smart App Control on will refuse to run
+          # it; see the README before handing this to anybody.
+          - os: windows-latest
+            label: windows-x86_64-unsigned
+    defaults:
+      run:
+        shell: bash
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable

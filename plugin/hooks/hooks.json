@@ -9,7 +9,7 @@
             "args": [
               "hook"
             ],
-            "command": "${CLAUDE_PLUGIN_ROOT}/bin/safescope"
+            "command": "${CLAUDE_PLUGIN_ROOT}/bin/safescope.exe"
           }
         ]
       }
@@ -22,7 +22,7 @@
             "args": [
               "hook"
             ],
-            "command": "${CLAUDE_PLUGIN_ROOT}/bin/safescope"
+            "command": "${CLAUDE_PLUGIN_ROOT}/bin/safescope.exe"
           }
         ]
       }
@@ -35,7 +35,7 @@
             "args": [
               "hook"
             ],
-            "command": "${CLAUDE_PLUGIN_ROOT}/bin/safescope"
+            "command": "${CLAUDE_PLUGIN_ROOT}/bin/safescope.exe"
           }
         ]
       }

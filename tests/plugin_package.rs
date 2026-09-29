@@ -36,7 +36,7 @@ fn read_json(relative: &str) -> Value {
 /// hook at all — while this test, which built the argv itself, went on passing.
 fn argv(entry: &Value, workspace: &Path) -> Vec<String> {
     let expand = |text: &str| {
-        text.replace("${CLAUDE_PLUGIN_ROOT}/bin/safescope", BINARY)
+        text.replace("${CLAUDE_PLUGIN_ROOT}/bin/safescope.exe", BINARY)
             .replace("${CLAUDE_PROJECT_DIR}", &workspace.to_string_lossy())
     };
     let command = entry["command"]
@@ -339,22 +339,69 @@ fn the_readme_does_not_promise_a_sandbox() {
     );
 }
 
-// Not on Windows, where no plugin is packaged. Whether the host finds
-// `bin/safescope` as `bin/safescope.exe` is a question about the host that has
-// not been asked of it, and a manifest is checked against what the host does,
-// never guessed at. The engine runs there; the plugin around it is unbuilt, and
-// the README says so.
-#[cfg(not(windows))]
+/// Every executable the manifests name, with the plugin root put where the host
+/// puts it.
+fn manifest_commands() -> Vec<PathBuf> {
+    let root = plugin_root().to_string_lossy().into_owned();
+    let hooks = read_json("hooks/hooks.json");
+    let servers = read_json(".mcp.json");
+
+    let hook_commands = hooks["hooks"]
+        .as_object()
+        .expect("hooks by event")
+        .values()
+        .flat_map(|groups| groups.as_array().expect("matcher groups").iter())
+        .flat_map(|group| group["hooks"].as_array().expect("handlers").iter())
+        .map(|handler| handler["command"].as_str().expect("command"));
+    let server_commands = servers["mcpServers"]
+        .as_object()
+        .expect("servers")
+        .values()
+        .map(|server| server["command"].as_str().expect("command"));
+
+    hook_commands
+        .chain(server_commands)
+        .map(|command| PathBuf::from(command.replace("${CLAUDE_PLUGIN_ROOT}", &root)))
+        .collect()
+}
+
+#[test]
+fn every_manifest_names_the_binary_by_a_name_windows_will_run() {
+    // On Windows the host requires a hook's command to "resolve to a real
+    // executable such as a .exe", and documents nothing about finding one from
+    // a name without the suffix. An extensionless name might work; `.exe` is
+    // what the documentation promises, so it is what every manifest says.
+    let commands = manifest_commands();
+    assert!(!commands.is_empty());
+    for command in &commands {
+        assert_eq!(
+            command.extension().and_then(|extension| extension.to_str()),
+            Some("exe"),
+            "{} is not a name the host documents running on Windows",
+            command.display()
+        );
+    }
+}
+
 #[test]
 fn the_packaged_plugin_answers_where_the_manifest_says_it_is() {
     // Every other test here substitutes the test binary for the path the
     // manifest names, which proves the engine answers and says nothing about
-    // whether the plugin somebody installs has one. `bin/safescope` is built by
-    // a script and not checked in, so a clone that skipped it has a manifest
+    // whether the plugin somebody installs has one. The binary is built by a
+    // script and not checked in, so a clone that skipped it has a manifest
     // pointing at nothing — and a plugin whose binary never answers is a plugin
     // that silently does nothing, which is the failure this project exists to
     // stop shipping.
-    let packaged = plugin_root().join("bin").join("safescope");
+    //
+    // The path comes from the manifests, not from this test. An earlier version
+    // named the file itself, and so could not have noticed a manifest and a
+    // build script that disagreed about what it was called.
+    let commands = manifest_commands();
+    let packaged = commands.first().expect("a command").clone();
+    assert!(
+        commands.iter().all(|command| *command == packaged),
+        "the manifests name different binaries: {commands:?}"
+    );
     assert!(
         packaged.is_file(),
         "{} is missing: run ./scripts/build-plugin.sh",
