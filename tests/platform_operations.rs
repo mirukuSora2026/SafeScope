@@ -276,6 +276,7 @@ mod rename_failures {
         assert!(matches!(mapped, safescope::error::Error::Denied(_)));
     }
 
+    #[cfg(unix)]
     #[test]
     fn a_taken_destination_is_still_a_refusal_when_it_is_an_errno() {
         // The shape Unix produces, so the new path does not cost the old one.
@@ -284,6 +285,7 @@ mod rename_failures {
         assert_eq!(mapped.code(), ErrorCode::DestinationExists);
     }
 
+    #[cfg(unix)]
     #[test]
     fn a_cross_device_move_is_still_a_refusal_when_it_is_an_errno() {
         let error = Error::from_raw_os_error(libc::EXDEV);
@@ -291,6 +293,7 @@ mod rename_failures {
         assert_eq!(mapped.code(), ErrorCode::UnsupportedOperation);
     }
 
+    #[cfg(unix)]
     #[test]
     fn something_the_engine_cannot_explain_stays_a_fault() {
         // The distinction only means anything if it can still say "fault".
@@ -300,5 +303,54 @@ mod rename_failures {
             matches!(mapped, safescope::error::Error::Faulted(_)),
             "an I/O failure is not a rule refusing"
         );
+    }
+
+    /// The codes Windows produces, which share a field and a range of numbers
+    /// with errno and mean something else by them.
+    #[cfg(windows)]
+    mod win32 {
+        use super::*;
+
+        /// ERROR_ALREADY_EXISTS, what a taken destination arrives as.
+        const ALREADY_EXISTS: i32 = 183;
+        /// ERROR_NOT_SAME_DEVICE — the number Unix uses for EEXIST.
+        const NOT_SAME_DEVICE: i32 = 17;
+        /// ERROR_NO_MORE_FILES — the number Unix uses for EXDEV.
+        const NO_MORE_FILES: i32 = 18;
+
+        #[test]
+        fn a_taken_destination_is_a_refusal() {
+            let error = Error::from_raw_os_error(ALREADY_EXISTS);
+            let mapped = map_rename_error(&error, "a.rs", "b.rs");
+            assert_eq!(mapped.code(), ErrorCode::DestinationExists);
+        }
+
+        #[test]
+        fn another_volume_is_a_cross_device_refusal_not_a_taken_destination() {
+            // Read as an errno this is EEXIST, which is how it was misread.
+            let error = Error::from_raw_os_error(NOT_SAME_DEVICE);
+            let mapped = map_rename_error(&error, "a.rs", "b.rs");
+            assert_eq!(mapped.code(), ErrorCode::UnsupportedOperation);
+        }
+
+        #[test]
+        fn a_code_that_shares_a_number_with_an_errno_is_not_read_as_one() {
+            // 18 is EXDEV on Unix. Here it is nothing a rename refuses with.
+            let error = Error::from_raw_os_error(NO_MORE_FILES);
+            let mapped = map_rename_error(&error, "a.rs", "b.rs");
+            assert!(
+                matches!(mapped, safescope::error::Error::Faulted(_)),
+                "a Win32 code was read as an errno"
+            );
+        }
+    }
+
+    #[test]
+    fn a_filesystem_that_cannot_refuse_to_overwrite_is_a_refusal() {
+        // Checking first instead would reopen the race the flag closes.
+        let error = Error::new(ErrorKind::Unsupported, "no such rename here");
+        let mapped = map_rename_error(&error, "a.rs", "b.rs");
+        assert_eq!(mapped.code(), ErrorCode::UnsupportedOperation);
+        assert!(matches!(mapped, safescope::error::Error::Denied(_)));
     }
 }

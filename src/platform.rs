@@ -308,7 +308,27 @@ pub fn map_rename_error(error: &std::io::Error, from_name: &str, to_name: &str) 
                 },
             ));
         }
+        // The filesystem cannot refuse to overwrite. Emulating that would mean
+        // checking first, which is the race the refusal exists to close.
+        std::io::ErrorKind::Unsupported => {
+            return Error::Denied(Denial::new(
+                ErrorCode::UnsupportedOperation,
+                Msg::PlatformAtomicRenameUnsupported {
+                    reason: error.to_string(),
+                },
+            ));
+        }
         _ => {}
+    }
+
+    // An errno means something only where the platform reports errno. Windows
+    // puts a Win32 code in the same field and the numbers overlap — EEXIST is
+    // 17, which there is ERROR_NOT_SAME_DEVICE, and EXDEV is 18, which is "no
+    // more files" — so matching them there would classify one failure as
+    // another. Its codes become kinds, through std and `windows::translate`,
+    // and were matched above.
+    if !cfg!(unix) {
+        return failed("rename", error);
     }
 
     match error.raw_os_error() {
