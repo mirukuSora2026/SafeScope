@@ -17,7 +17,7 @@ The status output says so, and so should you.
 |---|---|---|---|---|
 | macOS (Apple silicon) | every gate, 446 tests | yes — `sandbox-exec` | built | run here and in CI |
 | Linux (x86-64, arm64) | every gate, 446 tests | yes — Landlock | built | CI (x86-64), Docker (arm64) |
-| Windows (x86-64) | build, clippy, every test that applies | no — refuses | built, **unsigned** | CI (`windows-latest`) |
+| Windows (x86-64) | build, clippy, 436 tests | no — refuses | built, **unsigned** | CI (`windows-latest`) |
 
 Every row was run, not inferred. Windows shows why that matters: the port
 compiled and linted cleanly while its no-overwrite rename failed on every call,
