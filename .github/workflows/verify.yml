@@ -67,7 +67,10 @@ jobs:
       - name: Clippy
         run: cargo clippy --all-targets -- -D warnings
       - name: Tests
-        run: cargo test
+        # Every file, not only up to the first that fails. Most of the suite has
+        # never run here, and stopping at the first red file would take one push
+        # per file to find out what the rest of it says.
+        run: cargo test --no-fail-fast
 
   packaged:
     # The plugin as somebody installs it, not as the tests rebuild it. The
