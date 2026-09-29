@@ -13,17 +13,24 @@ The status output says so, and so should you.
 
 ## Where this runs
 
-| | engine | `safescope guard` | evidence |
-|---|---|---|---|
-| macOS (Apple silicon) | every gate, 403 tests | yes — `sandbox-exec` | run here |
-| Linux (arm64) | every gate, 403 tests | yes — Landlock | run here |
-| Windows (x86-64) | **compiles; never run** | no — refuses | cross-build only |
+| | engine | `safescope guard` | plugin package | evidence |
+|---|---|---|---|---|
+| macOS (Apple silicon) | every gate, 445 tests | yes — `sandbox-exec` | built | run here and in CI |
+| Linux (x86-64, arm64) | every gate, 445 tests | yes — Landlock | built | CI (x86-64), Docker (arm64) |
+| Windows (x86-64) | build, clippy, 434 tests | no — refuses | **not built** | CI (`windows-latest`) |
 
-The first two rows were run, not inferred. Windows was not: the port compiles,
-including every test, and no part of it has executed. Treat it as untested until
-the `windows-latest` job in CI is green — the first time this was run on Linux
-it turned out every durability guarantee had been silently unenforced there, and
-that is what an unrun platform is worth.
+Every row was run, not inferred. Windows shows why that matters: the port
+compiled and linted cleanly while its no-overwrite rename failed on every call,
+and the first run of the whole suite found drift detection blind to every
+subdirectory — a clean report for a workspace that was not.
+
+What the Windows row does not cover. It was run on the CI runner, a Windows
+Server image with administrator rights, not on a desktop. No plugin is packaged
+for Windows, because how the host finds the binary there has not been asked of
+it. And a desktop with Smart App Control on refuses to run an unsigned
+executable at all — including the build scripts `cargo` makes on the way, so
+building from source fails there too — so a Windows package would need a signed
+binary before it could reach those machines.
 
 On Windows the symlink tests need Developer Mode or an elevated prompt to make
 a link; without either they fail and say why, rather than passing without having

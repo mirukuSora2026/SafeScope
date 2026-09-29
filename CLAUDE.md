@@ -92,6 +92,20 @@ the tests.
 - A platform is supported when it has been run, not when it compiles. The first
   Linux run found every directory flush failing with EBADF, on code that had
   built cleanly for months. Say "compiles, never run" until CI says otherwise.
+- A path the platform produced becomes a `RelPath` through
+  `RelPath::from_platform`, never `to_string_lossy` and `parse`. On Windows the
+  separator is `\`, `parse` refuses it, and a caller that skipped what failed
+  to parse saw nothing below the top level — drift reported a clean workspace
+  and the hook let every nested write through, on code that passed on Unix.
+- A Win32 code is not an errno. `raw_os_error` holds one on Windows and the
+  numbers overlap — 17 is EEXIST on Unix and ERROR_NOT_SAME_DEVICE there — so
+  compare errno constants only under `cfg(unix)` and let Windows codes arrive
+  as kinds.
+- When a platform call fails for reasons the documentation does not explain,
+  probe the candidates side by side on that platform rather than guessing one
+  per CI round. Three rounds of reasoning about `SetFileInformationByHandle`
+  were each wrong; one probe showed it refuses a `RootDirectory` its own
+  documentation describes, and that the NT call beneath it does not.
 - Refuse what the platform cannot do properly; never emulate it. A no-overwrite
   rename that falls back to checking first reopens the race the flag closes, and
   a cross-filesystem move done as copy-then-delete is not one operation.
