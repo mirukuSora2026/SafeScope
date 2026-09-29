@@ -231,7 +231,7 @@ fn walk(root: &Path, directory: &Path, out: &mut Vec<PathState>, truncated: &mut
         let Ok(relative) = child.strip_prefix(root) else {
             continue;
         };
-        let Ok(path) = RelPath::parse(&relative.to_string_lossy()) else {
+        let Ok(path) = RelPath::from_platform(relative) else {
             continue;
         };
         if path.is_engine_temporary() {

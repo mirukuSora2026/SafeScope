@@ -107,6 +107,25 @@ impl RelPath {
         })
     }
 
+    /// Validates a relative path the platform produced, such as what is left of
+    /// a file's path once the workspace root is stripped from it.
+    ///
+    /// A `RelPath` is written with `/`. On Windows the platform writes `\`, which
+    /// [`parse`](Self::parse) refuses as it would in any other text — and both
+    /// callers skipped what failed to parse, so every file below the top level
+    /// went unseen: drift reported a clean workspace, and the hook stayed silent
+    /// about writes it should have refused. The platform's own separator is
+    /// turned into `/` and nothing else is rewritten, so a `.` or `..` still
+    /// arrives at `parse` and is still refused.
+    pub fn from_platform(relative: &std::path::Path) -> Result<Self, Denial> {
+        let text = relative.to_string_lossy();
+        // Only where `\` is the separator: elsewhere it is a character a file
+        // name may contain, and `parse` must see it to refuse it.
+        #[cfg(windows)]
+        let text = text.replace('\\', "/");
+        Self::parse(&text)
+    }
+
     /// The original path text. Used for filesystem access and journalling.
     pub fn as_str(&self) -> &str {
         &self.text

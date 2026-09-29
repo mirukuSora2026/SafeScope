@@ -273,7 +273,7 @@ fn decide(input: &HookInput) -> Option<String> {
     let absolute = target_path(&input.tool_name, &input.tool_input)?;
     let relative = absolute.strip_prefix(&root).ok()?;
     // Outside the workspace, SafeScope has nothing to say.
-    let path = RelPath::parse(&relative.to_string_lossy()).ok()?;
+    let path = RelPath::from_platform(relative).ok()?;
 
     let Some(approved) = approved else {
         // Registered but never approved: nothing may be changed yet, and saying
