@@ -66,6 +66,11 @@ jobs:
         run: cargo build --all-targets
       - name: Clippy
         run: cargo clippy --all-targets -- -D warnings
+      - name: Rename probe
+        # Tries each way of renaming against a directory handle and prints which
+        # the kernel accepted. It reports rather than fails, and runs before the
+        # tests so a red suite cannot hide its answer. Remove with the probe.
+        run: cargo run --example windows_rename_probe
       - name: Tests
         run: cargo test
 
