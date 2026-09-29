@@ -3,12 +3,21 @@
 //! Two of the three have a genuine equivalent and one does not, and saying which
 //! is which is the point of this file.
 //!
-//! **Renaming without overwriting** does. `SetFileInformationByHandle` with
-//! `FileRenameInfo` takes a `RootDirectory` handle and a `ReplaceIfExists` flag,
-//! so the rename is both relative to a directory handle — which is what keeps
-//! path decisions and execution on the same directory, as everywhere else — and
-//! refused atomically when the destination is taken. It is not a check followed
-//! by a rename, which is the emulation this crate refuses everywhere.
+//! **Renaming without overwriting** does. `NtSetInformationFile` with
+//! `FileRenameInformation` takes a `RootDirectory` handle and a `ReplaceIfExists`
+//! flag, so the rename is both relative to a directory handle — which is what
+//! keeps path decisions and execution on the same directory, as everywhere
+//! else — and refused atomically when the destination is taken. It is not a
+//! check followed by a rename, which is the emulation this crate refuses
+//! everywhere.
+//!
+//! The NT call rather than the Win32 one, measured: `SetFileInformationByHandle`
+//! documents the same structure with the same `RootDirectory` field, and refuses
+//! any non-null value for it with ERROR_INVALID_PARAMETER. A probe on the CI
+//! runner tried both against one directory handle — the Win32 call failed, the
+//! NT call renamed, and the Win32 call with a full path and no handle renamed
+//! too. That last is the one thing this file must not do: a full path is
+//! resolved again at the moment of the rename, which is the gap I4 closes.
 //!
 //! **A single-writer lock** does. `LockFileEx` with `LOCKFILE_EXCLUSIVE_LOCK`
 //! and `LOCKFILE_FAIL_IMMEDIATELY` refuses rather than waits, and the lock goes
@@ -24,22 +33,22 @@ use std::os::windows::io::{AsHandle, AsRawHandle, BorrowedHandle};
 use std::path::Path;
 
 use cap_std::fs::Dir;
+use windows_sys::Wdk::Storage::FileSystem::{
+    FILE_RENAME_INFORMATION, FileRenameInformation, NtSetInformationFile,
+};
 use windows_sys::Win32::Foundation::{
     ERROR_ALREADY_EXISTS, ERROR_FILE_EXISTS, ERROR_LOCK_VIOLATION, ERROR_NOT_SAME_DEVICE,
-    ERROR_SHARING_VIOLATION, HANDLE,
+    ERROR_SHARING_VIOLATION, HANDLE, RtlNtStatusToDosError,
 };
 use windows_sys::Win32::Storage::FileSystem::{
-    FILE_RENAME_INFO, FileRenameInfo, LOCKFILE_EXCLUSIVE_LOCK, LOCKFILE_FAIL_IMMEDIATELY,
-    LockFileEx, SetFileInformationByHandle,
+    LOCKFILE_EXCLUSIVE_LOCK, LOCKFILE_FAIL_IMMEDIATELY, LockFileEx,
 };
-use windows_sys::Win32::System::IO::OVERLAPPED;
+use windows_sys::Win32::System::IO::{IO_STATUS_BLOCK, OVERLAPPED};
 
 /// What a rename needs on the handle of the file being renamed.
 ///
-/// `DELETE` to move the name, and `SYNCHRONIZE` because without it the handle is
-/// asynchronous in NT's terms and `SetFileInformationByHandle` refuses it with
-/// ERROR_INVALID_PARAMETER — not the access error one would expect, which is
-/// what made it look like a malformed structure.
+/// `DELETE` to move the name, and `SYNCHRONIZE` so the handle is a synchronous
+/// one and the NT call has finished when it returns rather than merely started.
 ///
 /// Both are needed explicitly: `cap-std` treats `access_mode` as the whole mask
 /// rather than as something to combine with `read`, so whatever is not named
@@ -75,7 +84,7 @@ pub fn rename_no_replace(
     }
     let file = from_directory.open_with(from_name, &options)?;
 
-    // FILE_RENAME_INFO ends in a variable-length name, so it is built in a byte
+    // FILE_RENAME_INFORMATION ends in a variable-length name, so it is built in a byte
     // buffer rather than as a value: the struct's own size describes only the
     // first character of it.
     //
@@ -83,8 +92,7 @@ pub fn rename_no_replace(
     // is what the documentation asks for and reads like a contradiction until
     // both halves are read together: "FileName — a NUL-terminated wide-character
     // string", "FileNameLength — the size of FileName in bytes; a terminating
-    // null character is not required". Writing the name without one was accepted
-    // by every compiler and refused by the kernel with ERROR_INVALID_PARAMETER.
+    // null character is not required".
     let mut name: Vec<u16> = Path::new(to_name).as_os_str().encode_wide().collect();
     let name_bytes = name.len() * std::mem::size_of::<u16>();
     name.push(0);
@@ -94,13 +102,14 @@ pub fn rename_no_replace(
     // Aligned for the struct, which a `Vec<u8>` does not promise: its buffer is
     // guaranteed only byte alignment, and this one holds a HANDLE. A vector of
     // the aligned element gives the guarantee for free.
-    let header = std::mem::size_of::<FILE_RENAME_INFO>();
+    let header = std::mem::size_of::<FILE_RENAME_INFORMATION>();
     let words = (header + name_bytes).div_ceil(std::mem::size_of::<u64>());
     let mut buffer: Vec<u64> = vec![0; words];
 
     // SAFETY: `buffer` is at least `header + name_bytes` bytes and aligned to
-    // eight, which is what FILE_RENAME_INFO needs for the handle it carries.
-    let info = buffer.as_mut_ptr().cast::<FILE_RENAME_INFO>();
+    // eight, which is what FILE_RENAME_INFORMATION needs for the handle it
+    // carries.
+    let info = buffer.as_mut_ptr().cast::<FILE_RENAME_INFORMATION>();
     unsafe {
         (*info).Anonymous.ReplaceIfExists = false;
         (*info).RootDirectory = to_directory.as_raw_handle() as HANDLE;
@@ -116,31 +125,26 @@ pub fn rename_no_replace(
     }
 
     // SAFETY: the handle is borrowed from `file` for the duration of the call,
-    // and the buffer is live and of the length passed.
+    // the buffer is live and of the length passed, and the status block is a
+    // zeroed value of the right type. The handle is synchronous, so the call
+    // has finished with both when it returns.
+    let mut status: IO_STATUS_BLOCK = unsafe { std::mem::zeroed() };
     let outcome = unsafe {
-        SetFileInformationByHandle(
+        NtSetInformationFile(
             file.as_raw_handle() as HANDLE,
-            FileRenameInfo,
+            &raw mut status,
             buffer.as_ptr().cast(),
             (words * std::mem::size_of::<u64>()) as u32,
+            FileRenameInformation,
         )
     };
-    if outcome == 0 {
-        let error = std::io::Error::last_os_error();
-        // Carrying what was attempted. This call reports several different
-        // mistakes as one code, and a bare "the parameter is incorrect" sent an
-        // earlier fix after the wrong one.
-        return Err(match error.raw_os_error() {
-            Some(code) => translate(std::io::Error::new(
-                error.kind(),
-                format!(
-                    "{error} (code {code}; name {} bytes, buffer {} bytes, access {RENAME_ACCESS:#x})",
-                    name_bytes,
-                    words * std::mem::size_of::<u64>()
-                ),
-            )),
-            None => translate(error),
-        });
+    if outcome < 0 {
+        // An NTSTATUS, turned into the Win32 code the rest of the engine and
+        // `std::io::Error` understand: a taken destination arrives as
+        // STATUS_OBJECT_NAME_COLLISION and leaves as ERROR_ALREADY_EXISTS.
+        // SAFETY: a pure lookup on a value.
+        let code = unsafe { RtlNtStatusToDosError(outcome) };
+        return Err(translate(std::io::Error::from_raw_os_error(code as i32)));
     }
     Ok(())
 }
