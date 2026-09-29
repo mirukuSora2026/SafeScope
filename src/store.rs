@@ -44,6 +44,13 @@ pub fn data_root() -> Result<PathBuf> {
     let home = std::env::var_os("HOME").map(PathBuf::from);
     let platform_root = if cfg!(target_os = "macos") {
         home.map(|home| home.join("Library/Application Support"))
+    } else if cfg!(windows) {
+        // Local rather than roaming: snapshots are large and belong to the
+        // machine whose files they recorded. `HOME` is usually unset here, so
+        // without this every command failed unless SAFESCOPE_DATA_DIR was set.
+        std::env::var_os("LOCALAPPDATA")
+            .map(PathBuf::from)
+            .filter(|path| path.is_absolute())
     } else {
         std::env::var_os("XDG_DATA_HOME")
             .map(PathBuf::from)
