@@ -72,6 +72,14 @@ pub struct SafeScope {
     /// were checked. Losing them to a restart costs nothing: the payload is
     /// already staged and the plan can be built again.
     plans: Mutex<HashMap<PlanId, ChangePlan>>,
+    /// Plans already carried out under an idempotency key, with that key.
+    ///
+    /// Kept so a resend can be answered. Removing a plan once it was applied
+    /// stopped a second apply from reaching for it — and stopped a resend from
+    /// ever reaching the journal, which is the one place that knows the answer,
+    /// so the key the schema offered could never do what it said. Only the key
+    /// that spent a plan can reach it here.
+    spent: Mutex<HashMap<PlanId, (ChangePlan, RequestId)>>,
     undos: Mutex<HashMap<PlanId, UndoPlan>>,
     tool_router: ToolRouter<Self>,
 }
@@ -97,6 +105,7 @@ impl SafeScope {
             session: tokio::sync::Mutex::new(None),
             client: Mutex::new(None),
             plans: Mutex::new(HashMap::new()),
+            spent: Mutex::new(HashMap::new()),
             undos: Mutex::new(HashMap::new()),
             tool_router: flattened_router(),
         })
@@ -167,28 +176,47 @@ impl SafeScope {
         Parameters(request): Parameters<ApplyChange>,
     ) -> std::result::Result<Json<AppliedChange>, ErrorData> {
         let id = parse_plan_id(&request.plan_id)?;
-        let plan = self
-            .plans
-            .lock()
-            .expect("plan lock")
-            .get(&id)
-            .cloned()
-            .ok_or_else(|| unknown_plan(&request.plan_id))?;
-
-        let key = request
+        let request_id = request
             .request_id
             .as_deref()
-            .map(|text| idempotency_key(text, &plan))
+            .map(|text| wire::request_id_of(text).map_err(|error| to_mcp_error(&error)))
             .transpose()?;
+
+        let live = self.plans.lock().expect("plan lock").get(&id).cloned();
+        let plan = match live {
+            Some(plan) => plan,
+            // Already carried out, and asked for again under the key that did
+            // it: a resend whose first answer was lost. The journal answers it
+            // with the original record. Any other second use is refused.
+            None => self
+                .spent
+                .lock()
+                .expect("spent lock")
+                .get(&id)
+                .filter(|(_, used)| Some(*used) == request_id)
+                .map(|(plan, _)| plan.clone())
+                .ok_or_else(|| unknown_plan(&request.plan_id))?,
+        };
+        let key = request_id.map(|id| crate::executor::RequestKey {
+            id,
+            digest: wire::request_digest(&plan),
+        });
 
         let mut session = self.session().await?;
         let record = session
             .apply(&plan, key)
             .map_err(|error| to_mcp_error(&error))?;
 
-        // A spent plan is removed, so a second apply cannot reach for it. The
-        // journal, not this map, is what makes a resend safe.
-        self.plans.lock().expect("plan lock").remove(&id);
+        // A spent plan leaves the live map, so a second apply cannot reach for
+        // it. One spent under a key is kept aside for that key alone.
+        if let Some(plan) = self.plans.lock().expect("plan lock").remove(&id)
+            && let Some(used) = request_id
+        {
+            self.spent
+                .lock()
+                .expect("spent lock")
+                .insert(id, (plan, used));
+        }
         Ok(Json(AppliedChange::of(&record)))
     }
 
@@ -438,27 +466,6 @@ fn unknown_plan(text: &str) -> ErrorData {
         )
         .with_hint(Msg::HintRebuildThePlan),
     ))
-}
-
-/// Binds an idempotency key to the plan it was sent with.
-///
-/// The digest covers the plan, so reusing a key for a different change is a
-/// mismatch the journal will refuse rather than a silent second application.
-fn idempotency_key(
-    text: &str,
-    plan: &ChangePlan,
-) -> std::result::Result<crate::executor::RequestKey, ErrorData> {
-    let id = RequestId::from_str(text).map_err(|_| {
-        to_mcp_error(&crate::error::Error::Denied(crate::error::Denial::new(
-            crate::error::ErrorCode::InvalidPath,
-            Msg::McpMissingField {
-                field: "request_id".to_owned(),
-            },
-        )))
-    })?;
-    let digest =
-        crate::hash::ContentHash::of_bytes(format!("{}:{:?}", plan.id, plan.transition).as_bytes());
-    Ok(crate::executor::RequestKey { id, digest })
 }
 
 /// Seconds from now until `time`, or zero if it has passed.

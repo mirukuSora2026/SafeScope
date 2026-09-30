@@ -57,8 +57,9 @@ pub struct PreparedPlan {
 #[derive(Debug, Clone, Deserialize, schemars::JsonSchema)]
 pub struct ApplyChange {
     pub plan_id: String,
-    /// An idempotency key. Resending the same key with the same plan returns
-    /// the original result rather than acting twice.
+    /// An idempotency key: any string you choose. Resending the same key with
+    /// the same plan returns the original result rather than acting twice,
+    /// which is what to do when an answer was lost.
     #[serde(default)]
     pub request_id: Option<String>,
 }
@@ -351,4 +352,39 @@ fn missing(operation: &str, field: &str) -> Error {
             field: field.to_owned(),
         }),
     )
+}
+
+/// Names a request by the text the client chose for it.
+///
+/// Any string. The schema calls it an idempotency key and says nothing about
+/// its shape, so a client sends `req-1` — which was once refused with "this
+/// operation needs a request_id and none was given", a sentence that was false
+/// and a reason to try again. Text that already reads as a request id is taken
+/// as one; anything else is named by its hash, so the same text always names
+/// the same request.
+pub fn request_id_of(text: &str) -> Result<crate::ids::RequestId> {
+    use std::str::FromStr as _;
+
+    if text.trim().is_empty() {
+        return Err(Error::Denied(Denial::new(
+            ErrorCode::InvalidPath,
+            Msg::McpMissingField {
+                field: "request_id".to_owned(),
+            },
+        )));
+    }
+    Ok(crate::ids::RequestId::from_str(text).unwrap_or_else(|_| {
+        let hash = crate::hash::ContentHash::of_bytes(text.as_bytes());
+        let mut bytes = [0; 16];
+        bytes.copy_from_slice(&hash.as_bytes()[..16]);
+        crate::ids::RequestId::from_uuid(uuid::Uuid::from_bytes(bytes))
+    }))
+}
+
+/// What binds a request to the plan it was sent with.
+///
+/// It covers the plan, so reusing a key for a different change is a mismatch
+/// the journal refuses rather than a silent second application.
+pub fn request_digest(plan: &crate::planner::ChangePlan) -> crate::hash::ContentHash {
+    crate::hash::ContentHash::of_bytes(format!("{}:{:?}", plan.id, plan.transition).as_bytes())
 }

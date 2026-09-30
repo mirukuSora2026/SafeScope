@@ -7,7 +7,7 @@
 mod mcp_client;
 
 use mcp_client::{Client, POLICY};
-use serde_json::json;
+use serde_json::{Value, json};
 
 #[test]
 fn the_server_offers_its_whole_surface() {
@@ -182,6 +182,69 @@ fn a_plan_cannot_be_applied_twice() {
 
     assert_eq!(error["data"]["code"], "PLAN_NOT_FOUND");
     assert_eq!(client.read("src/Once.java"), "once\n");
+}
+
+/// The idempotency key, as a client uses it.
+///
+/// Measured end to end: `request_id = "req-1"` was refused with "needs a
+/// request_id and none was given", because only a UUID was accepted and the
+/// schema never said so. And once a plan was applied it was removed, so a
+/// resend under the same key never reached the journal that could answer it.
+mod idempotency {
+    use super::*;
+
+    fn prepared(client: &mut Client, path: &str) -> Value {
+        client.call(
+            "prepare_change",
+            json!({ "operation": "create", "path": path, "contents": "once\n" }),
+        )
+    }
+
+    #[test]
+    fn a_key_can_be_any_string_the_client_chooses() {
+        let mut client = Client::connect();
+        let plan = prepared(&mut client, "src/Keyed.java");
+        let applied = client.call(
+            "apply_change",
+            json!({ "plan_id": plan["plan_id"], "request_id": "req-1" }),
+        );
+        assert_eq!(applied["stage"], "committed");
+        assert_eq!(client.read("src/Keyed.java"), "once\n");
+    }
+
+    #[test]
+    fn a_resend_under_the_same_key_returns_the_original_result() {
+        // What a client does when the first answer was lost.
+        let mut client = Client::connect();
+        let plan = prepared(&mut client, "src/Resent.java");
+        let arguments = json!({ "plan_id": plan["plan_id"], "request_id": "retry-me" });
+
+        let first = client.call("apply_change", arguments.clone());
+        let second = client.call("apply_change", arguments);
+
+        assert_eq!(first, second, "a resend is answered, not acted on");
+        let history = client.call("get_history", json!({}));
+        assert_eq!(
+            history["operations"].as_array().expect("operations").len(),
+            1,
+            "one change, however many times it was asked for"
+        );
+    }
+
+    #[test]
+    fn a_spent_plan_is_still_refused_under_a_different_key() {
+        let mut client = Client::connect();
+        let plan = prepared(&mut client, "src/Twice.java");
+        client.call(
+            "apply_change",
+            json!({ "plan_id": plan["plan_id"], "request_id": "first" }),
+        );
+        let error = client.call_expecting_refusal(
+            "apply_change",
+            json!({ "plan_id": plan["plan_id"], "request_id": "second" }),
+        );
+        assert_eq!(error["data"]["code"], "PLAN_NOT_FOUND");
+    }
 }
 
 #[test]
