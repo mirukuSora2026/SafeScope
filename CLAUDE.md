@@ -121,10 +121,23 @@ the tests.
 - The guard's sandbox profile names the resolved path as well as the given one.
   On macOS `/var` is a symlink to `/private/var`, so a profile naming only the
   first loads without error and protects nothing.
+- The seatbelt profile also denies writes to every directory above the
+  workspace, each as a `literal`. It names paths, so renaming an ancestor moved
+  the workspace out from under a profile that named only the subtree — measured,
+  and a write went through. A rename is a write to what is renamed, so naming
+  the ancestors stops it and leaves the files beside them alone.
+- The guard binds the command's process tree, not the machine. A process it
+  did not start and can talk to — the Docker daemon, measured — writes where
+  the sandbox forbids. Never describe the guard as making a change impossible
+  without saying for whom.
 - Landlock has no deny rule, so the guard says "everything but the workspace" by
   granting read on `/` and write on the siblings of each step down to it. A path
   that cannot be read while that list is built is skipped, which loses write
   access rather than granting it: a rule that fails to be written fails closed.
+- Under Landlock a guarded command cannot create a file directly in a
+  directory above the workspace: a right on a directory reaches everything
+  beneath it, so granting it there would grant it inside. This is a limit of
+  the kernel's language, pinned by a test on each platform, not a bug to fix.
 - The Landlock ruleset is built before the fork and applied in `pre_exec`.
   Building it allocates and reads directories, neither of which is allowed after
   a fork; applying it any earlier would take the workspace from the engine,

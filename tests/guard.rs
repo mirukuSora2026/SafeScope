@@ -176,6 +176,104 @@ fn a_guarded_command_cannot_reach_around_through_another_program() {
     );
 }
 
+/// A workspace two directories below one the test owns, so an ancestor can be
+/// renamed without touching anything outside the test.
+fn nested_workspace() -> (TempDir, TempDir, std::path::PathBuf) {
+    let data = TempDir::new().expect("data");
+    let outer = TempDir::new().expect("outer");
+    let root = outer.path().join("parent").join("ws");
+    unsafe { std::env::set_var(DATA_DIR_ENV, data.path()) };
+
+    fs::create_dir_all(root.join("src")).expect("mkdir");
+    fs::write(root.join("src/main.rs"), "fn main() {}\n").expect("seed");
+    let registration = registry::init(&root).expect("init");
+    fs::write(registration.policy_path(), POLICY).expect("policy");
+    let policy = approve::check_policy(POLICY).expect("valid");
+    approve::perform(&registration, policy, POLICY).expect("approve");
+
+    (data, outer, root)
+}
+
+#[test]
+fn a_guarded_command_cannot_move_the_workspace_out_from_under_the_rule() {
+    // Measured before this was fixed: renaming a directory above the
+    // workspace changed every path in it, the macOS rule named the old ones,
+    // and a write through the new path went straight through.
+    if !can_guard() {
+        return;
+    }
+    let _serialised = env_lock();
+    let (data, outer, root) = nested_workspace();
+
+    let output = guarded(
+        data.path(),
+        &root,
+        "cd ../.. && mv parent moved && echo changed > moved/ws/src/main.rs \
+         && echo WROTE || echo REFUSED",
+    );
+    assert!(text(&output).contains("REFUSED"), "{}", text(&output));
+    assert_eq!(
+        fs::read_to_string(outer.path().join("parent/ws/src/main.rs")).expect("still there"),
+        "fn main() {}\n"
+    );
+}
+
+#[test]
+fn a_guarded_command_can_still_write_in_a_directory_beside_the_workspace() {
+    // Naming the ancestors must not take the directories beside the workspace
+    // with them: they are other paths, and a guard that broke them would be a
+    // guard people turn off.
+    if !can_guard() {
+        return;
+    }
+    let _serialised = env_lock();
+    let (data, outer, root) = nested_workspace();
+    fs::create_dir(outer.path().join("parent/beside")).expect("mkdir");
+
+    let output = guarded(
+        data.path(),
+        &root,
+        "echo x > ../beside/f && rm ../beside/f && echo x > ../beside/g \
+         && echo WROTE || echo REFUSED",
+    );
+    assert!(text(&output).contains("WROTE"), "{}", text(&output));
+    assert!(outer.path().join("parent/beside/g").is_file());
+}
+
+/// Whether a new file can be made directly in a directory above the workspace.
+///
+/// Not the same answer on both kernels, and pinned on each so a change to
+/// either is noticed. Seatbelt names paths, so the directory's own entry is
+/// denied and everything else in it is not. Landlock has no deny rule and a
+/// right granted on a directory reaches everything beneath it, so granting
+/// "create a file here" on the workspace's parent would grant it inside the
+/// workspace too — it is not granted, and a file cannot be made there. With a
+/// workspace under the home directory, that means no new file directly in it.
+#[test]
+fn a_new_file_directly_above_the_workspace_follows_the_kernel() {
+    if !can_guard() {
+        return;
+    }
+    let _serialised = env_lock();
+    let (data, outer, root) = nested_workspace();
+
+    let output = guarded(
+        data.path(),
+        &root,
+        "echo x > ../above.txt && echo WROTE || echo REFUSED",
+    );
+    let made = outer.path().join("parent/above.txt").is_file();
+    if cfg!(target_os = "macos") {
+        assert!(made && text(&output).contains("WROTE"), "{}", text(&output));
+    } else {
+        assert!(
+            !made && text(&output).contains("REFUSED"),
+            "{}",
+            text(&output)
+        );
+    }
+}
+
 #[test]
 fn a_guarded_command_can_still_read_the_workspace() {
     // Denying reads would make the guard useless: an agent that cannot read the

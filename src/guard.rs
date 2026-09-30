@@ -7,10 +7,16 @@
 //! having and none of it is a boundary: a hook can be turned off, and a tool the
 //! host never shows the hook is a tool the hook never sees.
 //!
-//! This is the boundary. The command runs under a kernel sandbox that denies
-//! every write to the workspace, so a change that did not go through the engine
-//! is not refused — it is impossible. The engine runs out here, outside the
-//! sandbox, and the only thing inside is a relay that carries bytes to it.
+//! This is the boundary, for the command and everything it starts. They run
+//! under a kernel sandbox that denies every write to the workspace, so a change
+//! they make without the engine is not refused — it is impossible. The engine
+//! runs out here, outside the sandbox, and the only thing inside is a relay that
+//! carries bytes to it.
+//!
+//! It binds that process tree and nothing else. A process the command did not
+//! start — the Docker daemon, measured, via `docker run -v` — can be asked to
+//! write and is not under the sandbox. Say "the command cannot write", never
+//! "nothing can".
 //!
 //! ```text
 //!   safescope guard -- claude …
@@ -60,10 +66,29 @@ fn profile(workspace: &Path) -> String {
     {
         subtrees.push(resolved);
     }
-    let denied = subtrees
+    let mut denied = subtrees
         .iter()
         .map(|path| format!("   (subpath {})\n", quote(&path.to_string_lossy())))
         .collect::<String>();
+
+    // Every directory above it as well — each one itself, not what is under it.
+    // A seatbelt rule names a path, and renaming any directory on the way to the
+    // workspace moves the workspace out from under the name. Measured: `mv` of
+    // the workspace's grandparent, then a write through the new path, went
+    // straight through a profile that named only the subtree. A rename is a
+    // write to the thing renamed, so naming each ancestor stops it, while files
+    // beside the workspace are other paths and stay writable. Landlock has no
+    // such gap: its rules hold directories, not their names.
+    let ancestors: std::collections::BTreeSet<&Path> = subtrees
+        .iter()
+        .flat_map(|path| path.ancestors().skip(1))
+        .collect();
+    for ancestor in ancestors {
+        denied.push_str(&format!(
+            "   (literal {})\n",
+            quote(&ancestor.to_string_lossy())
+        ));
+    }
 
     format!(
         "(version 1)\n\

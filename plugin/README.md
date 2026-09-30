@@ -35,9 +35,9 @@ where Smart App Control is off.
 
 On Windows the symlink tests need Developer Mode or an elevated prompt to make
 a link; without either they fail and say why, rather than passing without having
-asked. The guard's nine are skipped there, because it has no sandbox to run
-under. A Linux older than Landlock (before 5.13) skips the guard's nine
-too and refuses to guard, rather than running a command unprotected.
+asked. The guard's tests are skipped there, because it has no sandbox to run
+under. A Linux older than Landlock (before 5.13) skips them too and refuses to
+guard, rather than running a command unprotected.
 
 ### What Windows does differently
 
@@ -137,21 +137,42 @@ Measured on the same project: with the allowlist in force the agent tried
 `Edit`, `Bash` and `Agent`, was refused each time with the reason, and changed
 nothing.
 
-**`safescope guard -- <command>`** stops being a check and becomes a boundary.
-The command runs under a kernel sandbox with every write to the workspace
-denied, so a change outside the engine is impossible rather than refused, and
-everything the command starts inherits it. The engine runs outside the sandbox
-and the agent reaches it over a socket, so the audited path still works.
+**`safescope guard -- <command>`** stops being a check and becomes a boundary
+for the command and everything it starts. They run under a kernel sandbox with
+every write to the workspace denied, so a change they make outside the engine is
+impossible rather than refused. The engine runs outside the sandbox and the
+agent reaches it over a socket, so the audited path still works.
 
 Measured on the same project: the agent completed the task through SafeScope in
 ten turns, both changes recorded, nothing changed outside — and asked to create
 a file with a shell redirect, it got `operation not permitted` from the kernel.
+Measured again with an agent told outright to avoid SafeScope and write the
+files with shell commands: it tried eleven ways — redirects, `tee`, `sed`,
+`cp`, `mv`, Python, Perl, Ruby — and the kernel refused every one.
 
 Two kernels can do this and they say it differently. macOS gets a seatbelt
-profile denying writes under the workspace. Linux gets a Landlock ruleset, which
-has no deny rule — so the same sentence is said the other way round: read is
+profile denying writes under the workspace, and to each directory above it —
+the profile names paths, and renaming a directory on the way to the workspace
+once moved it out from under the rule. Linux gets a Landlock ruleset, which has
+no deny rule — so the same sentence is said the other way round: read is
 granted on everything, write on every directory that is *not* on the way to the
-workspace. Both were run; the same nine tests pass on both.
+workspace. Both were run; the same tests pass on both.
+
+What the guard does not bind:
+
+- **A process it did not start.** The sandbox belongs to the command's process
+  tree. Anything else the command can ask to write — measured: the Docker
+  daemon, through `docker run -v` — is outside it and writes freely. So are
+  launchd jobs, other applications driven by Apple Events, and an already
+  running `tmux` server. The guard removes a capability from the agent; it does
+  not remove every program the agent can talk to.
+- **On Linux, a new file directly above the workspace.** A Landlock right given
+  to a directory reaches everything beneath it, so "create a file in the
+  workspace's parent" cannot be granted without granting it inside the
+  workspace. With a workspace under your home directory, a guarded command
+  cannot create a new file directly in `~` — existing files there stay
+  writable, and so does every directory beside the path. macOS has no such
+  limit.
 
 Elsewhere, and on a Linux before 5.13, it refuses rather than running the command
 unprotected. It denies writes without exception, so a test run cannot write
