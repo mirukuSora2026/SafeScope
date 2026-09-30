@@ -179,6 +179,24 @@ fn doctor_names_every_check_not_only_the_failures() {
 }
 
 #[test]
+fn doctor_is_healthy_right_after_the_setup_instructions() {
+    // Init, fill in the policy, approve — and nothing changed yet, so no task.
+    // That is where every workspace starts, and doctor once called it a
+    // failure and exited 1. The test above only looked for the check names.
+    let _guard = env_lock();
+    let (data, root) = workspace();
+
+    let output = run(data.path(), root.path(), &["doctor"]);
+    assert_eq!(output.status.code(), Some(0), "{}", stdout(&output));
+    assert!(!stdout(&output).contains("FAILED"), "{}", stdout(&output));
+    assert!(
+        stdout(&output).contains("no task started"),
+        "{}",
+        stdout(&output)
+    );
+}
+
+#[test]
 fn doctor_fails_on_an_unapproved_policy_edit() {
     let _guard = env_lock();
     let (data, root) = workspace();

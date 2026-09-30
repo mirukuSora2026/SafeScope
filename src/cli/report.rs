@@ -131,12 +131,30 @@ pub fn doctor(workspace: &Path) -> Result<i32> {
     heading(Label::Checks);
     // Each check is named whether it passed or not. Listing only the failures
     // would read as a clean bill of health for everything it never looked at.
+    let verdict = |passed: bool| {
+        if passed {
+            (Label::Passed, true)
+        } else {
+            (Label::Failed, false)
+        }
+    };
     let checks = [
-        (Label::Policy, status.policy_version.is_some()),
-        (Label::Task, status.task.is_some()),
-        (Label::Unfinished, status.unsettled == 0),
-        (Label::NeedsComparing, status.needs_attention == 0),
-        (Label::PolicyFile, !status.unapproved_policy_edits),
+        (Label::Policy, verdict(status.policy_version.is_some())),
+        // A task begins with the first change, so a workspace that has made
+        // none has no task — which is where every workspace starts. Calling it
+        // a failure made the first `doctor` after the setup instructions exit
+        // 1, with nothing wrong and nothing said about why.
+        (
+            Label::Task,
+            if status.task.is_some() {
+                (Label::Passed, true)
+            } else {
+                (Label::NotStarted, true)
+            },
+        ),
+        (Label::Unfinished, verdict(status.unsettled == 0)),
+        (Label::NeedsComparing, verdict(status.needs_attention == 0)),
+        (Label::PolicyFile, verdict(!status.unapproved_policy_edits)),
     ];
 
     // Not a check that can fail — it is a property of the platform, and a person
@@ -146,8 +164,7 @@ pub fn doctor(workspace: &Path) -> Result<i32> {
     }
 
     let mut healthy = true;
-    for (label, passed) in checks {
-        let outcome = if passed { Label::Passed } else { Label::Failed };
+    for (label, (outcome, passed)) in checks {
         println!(
             "  {}{}",
             pad(&Msg::Label(label).to_string(), LABEL_WIDTH),
